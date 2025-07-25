@@ -20,7 +20,7 @@ app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ تحميل الأوامر من مجلد commands
+// تحميل الأوامر (لو عندك أوامر في مجلد commands)
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -32,7 +32,6 @@ if (fs.existsSync(commandsPath)) {
   });
 }
 
-// ✅ إنشاء جلسة جديدة
 async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = null) {
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
   fs.mkdirSync(sessionPath, { recursive: true });
@@ -40,25 +39,26 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const { version } = await fetchLatestBaileysVersion();
 
+  // هنا نمرر mobile: true ليظهر إشعار الجهاز الجديد في واتساب
   const sock = makeWASocket({
     version,
     auth: state,
     printQRInTerminal: false,
-    generateHighQualityLinkPreview: true
+    generateHighQualityLinkPreview: true,
+    mobile: true  // <- هذه الخاصية مهمة جداً لإشعارات الاقتران!
   });
 
   sessions[sessionId] = sock;
   sock.ev.on('creds.update', saveCreds);
 
-  // ✅ وضع رمز الاقتران (مع إشعار داخل واتساب)
+  // طلب رمز الاقتران
   if (mode === 'pairing' && !sock.authState.creds.registered) {
     if (!phoneNumber) {
       if (res) return res.json({ error: 'يرجى إدخال رقم الهاتف' });
       return;
     }
     try {
-      // ✅ هنا السحر: mobile: true لإظهار إشعار في واتساب
-      let code = await sock.requestPairingCode(phoneNumber.replace(/[^0-9]/g, ''), { mobile: true });
+      let code = await sock.requestPairingCode(phoneNumber.replace(/[^0-9]/g, ''));
       code = code?.match(/.{1,4}/g)?.join('-') || code;
       if (res) return res.json({ pairingCode: code, sessionId });
     } catch (err) {
@@ -67,7 +67,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
     }
   }
 
-  // ✅ تحديثات الاتصال
+  // تحديثات الاتصال
   sock.ev.on('connection.update', async (update) => {
     const { connection, qr, lastDisconnect } = update;
 
@@ -86,58 +86,19 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
 
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
+
+      // ترسل رسالة ترحيبية (اختياري)
       const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
-
-      const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
-✅ *تم ربط الجلسة بنجاح!*  
-🔑 *معرف الجلسة:* \`${sessionId}\`
-
-🧠 *أوامر مقترحة:*  
-━━━━━━━━━━━━━━━  
-• *tarzan* ⬅️ لعرض جميع الأوامر الجاهزة  
-━━━━━━━━━━━━━━━  
-⚡ *استمتع بالتجربة الآن!*`;
+      const caption = `✨ *تم ربط الجلسة بنجاح!*  
+🔑 *معرف الجلسة:* \`${sessionId}\``;
 
       await sock.sendMessage(selfId, {
-        image: { url: 'https://b.top4top.io/p_3489wk62d0.jpg' },
-        caption: caption,
-        footer: "🤖 طرزان الواقدي - بوت الذكاء الاصطناعي ⚔️",
-        buttons: [
-          { buttonId: "help", buttonText: { displayText: "📋 عرض الأوامر" }, type: 1 },
-          { buttonId: "menu", buttonText: { displayText: "📦 قائمة الميزات" }, type: 1 }
-        ],
-        headerType: 4
+        text: caption
       });
     }
   });
 
-  // ✅ منع حذف الرسائل
-  sock.ev.on('messages.update', async updates => {
-    for (const { key, update } of updates) {
-      if (update?.message === null && key?.remoteJid && !key.fromMe) {
-        try {
-          const stored = msgStore.get(`${key.remoteJid}_${key.id}`);
-          if (!stored?.message) return;
-
-          const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
-          const senderJid = key.participant || stored.key?.participant || key.remoteJid;
-          const number = senderJid?.split('@')[0] || 'مجهول';
-          const name = stored.pushName || 'غير معروف';
-          const type = Object.keys(stored.message)[0];
-          const time = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
-
-          await sock.sendMessage(selfId, {
-            text: `🚫 *تم حذف رسالة!*\n👤 *الاسم:* ${name}\n📱 *الرقم:* wa.me/${number}\n🕒 *الوقت:* ${time}\n📂 *نوع الرسالة:* ${type}`
-          });
-          await sock.sendMessage(selfId, { forward: stored });
-        } catch (err) {
-          console.error('❌ خطأ في منع الحذف:', err.message);
-        }
-      }
-    }
-  });
-
-  // ✅ استقبال الأوامر
+  // استماع للرسائل (مثال بسيط)
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.message) return;
@@ -174,7 +135,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
   });
 }
 
-// ✅ API Endpoints
+// API Endpoints
 app.post('/create-session', (req, res) => {
   const { sessionId, mode, phone } = req.body;
   if (!sessionId) return res.json({ error: 'أدخل اسم الجلسة' });
