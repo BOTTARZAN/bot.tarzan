@@ -16,7 +16,6 @@ const PASSWORD = 'tarzanbot';
 const sessions = {};
 const msgStore = new Map();
 
-// ✅ واجهة المستخدم
 app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -31,8 +30,8 @@ fs.readdirSync(commandsPath).forEach(file => {
   }
 });
 
-// ✅ دالة تشغيل الجلسة
-async function startSession(sessionId, res) {
+// ✅ بدء جلسة جديدة
+async function startSession(sessionId, res, phoneNumber = null) {
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
   fs.mkdirSync(sessionPath, { recursive: true });
 
@@ -53,18 +52,21 @@ async function startSession(sessionId, res) {
   sock.ev.on('connection.update', async (update) => {
     const { connection, qr, lastDisconnect } = update;
 
+    // ✅ عرض QR في واجهة المستخدم
     if (qr && res) {
       const qrData = await qrCode.toDataURL(qr);
       res.json({ qr: qrData });
       res = null;
     }
 
+    // ✅ عند إغلاق الاتصال
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
       if (shouldReconnect) startSession(sessionId);
       else delete sessions[sessionId];
     }
 
+    // ✅ عند الاتصال
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
       const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
@@ -153,19 +155,29 @@ async function startSession(sessionId, res) {
       }
     }
   });
+
+  // ✅ إذا تم تمرير رقم الهاتف، أنشئ رمز اقتران
+  if (phoneNumber) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(phoneNumber);
+        console.log(`✅ رمز الاقتران لـ ${phoneNumber}: ${code}`);
+      } catch (err) {
+        console.error('❌ فشل إنشاء رمز الاقتران:', err.message);
+      }
+    }, 3000);
+  }
 }
 
-// ✅ API Endpoints
+// ✅ API
 app.post('/create-session', (req, res) => {
-  const { sessionId } = req.body;
+  const { sessionId, phoneNumber } = req.body;
   if (!sessionId) return res.json({ error: 'أدخل اسم الجلسة' });
   if (sessions[sessionId]) return res.json({ message: 'الجلسة موجودة مسبقاً' });
-  startSession(sessionId, res);
+  startSession(sessionId, res, phoneNumber);
 });
 
-app.get('/sessions', (req, res) => {
-  res.json(Object.keys(sessions));
-});
+app.get('/sessions', (req, res) => res.json(Object.keys(sessions)));
 
 app.post('/delete-session', (req, res) => {
   const { sessionId, password } = req.body;
