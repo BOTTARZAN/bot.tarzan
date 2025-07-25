@@ -23,14 +23,19 @@
       border-radius: 8px; border: none; font-size: 16px;
     }
     input { background: #f1f5f9; color: #111; }
-    button {
-      background: #38bdf8; color: #fff; font-weight: bold; cursor: pointer;
-      transition: background 0.3s ease;
-    }
+    button { background: #38bdf8; color: #fff; font-weight: bold; cursor: pointer; }
     button:hover { background: #0ea5e9; }
     .qr-container img {
       margin-top: 15px; width: 250px; border-radius: 8px; border: 3px solid #38bdf8;
     }
+    .copy-btn {
+      margin-top: 10px;
+      background: #22c55e; color: #fff;
+      padding: 10px; border-radius: 8px;
+      cursor: pointer; font-weight: bold;
+      width: 100%;
+    }
+    .copy-btn:hover { background: #16a34a; }
     .sessions-list {
       margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 10px; text-align: left;
     }
@@ -42,34 +47,17 @@
     .delete-btn {
       background: #ef4444; padding: 5px 10px; border-radius: 6px;
       color: #fff; cursor: pointer; border: none;
-      transition: background 0.3s ease;
     }
     .delete-btn:hover { background: #dc2626; }
     .toggle {
       margin-top: 10px; color: #ccc; cursor: pointer; font-size: 14px;
     }
-    .pairing-code {
-      margin-top: 15px;
-      background: #0f172a;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 18px;
-      color: #38bdf8;
-      font-weight: bold;
+    .alert {
+      margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 14px;
+      display: none;
     }
-    .copy-btn {
-      margin-top: 10px;
-      background: #22c55e;
-      color: #fff;
-      padding: 10px;
-      width: auto;
-      display: inline-block;
-      font-size: 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
-    .copy-btn:hover { background: #16a34a; }
+    .alert.success { background: #22c55e; color: #fff; }
+    .alert.error { background: #ef4444; color: #fff; }
   </style>
 </head>
 <body>
@@ -77,12 +65,11 @@
     <h1>إدارة جلسات واتساب</h1>
 
     <input type="text" id="sessionId" placeholder="أدخل اسم الجلسة">
-    <div id="extraFields" style="display: none;">
-      <input type="text" id="phoneNumber" placeholder="أدخل رقم الهاتف مع رمز الدولة (+966...)">
-    </div>
+    <input type="text" id="phoneNumber" placeholder="أدخل رقم الهاتف مع رمز الدولة (+966...)">
 
     <button onclick="createSession()">إنشاء الجلسة</button>
-    <div class="toggle" onclick="togglePairing()">🔗 تفعيل / إخفاء خيار رمز الاقتران</div>
+
+    <div class="alert" id="alertBox"></div>
 
     <div class="qr-container" id="qrContainer"></div>
 
@@ -93,60 +80,53 @@
   </div>
 
   <script>
-    const API_BASE = ''; // اجعلها فارغة لاستخدام نفس السيرفر
-    let pairingMode = false;
+    const API_BASE = '';
+    let currentCode = '';
 
-    function togglePairing() {
-      const extra = document.getElementById('extraFields');
-      pairingMode = !pairingMode;
-      extra.style.display = pairingMode ? 'block' : 'none';
+    function showAlert(message, type = 'success') {
+      const alertBox = document.getElementById('alertBox');
+      alertBox.textContent = message;
+      alertBox.className = `alert ${type}`;
+      alertBox.style.display = 'block';
+      setTimeout(() => alertBox.style.display = 'none', 3000);
     }
 
     async function createSession() {
       const sessionId = document.getElementById('sessionId').value.trim();
       const phoneNumber = document.getElementById('phoneNumber').value.trim();
-      if (!sessionId) return alert('أدخل اسم الجلسة أولاً');
-
-      const mode = pairingMode ? 'pairing' : 'qr';
+      if (!sessionId || !phoneNumber) return showAlert('أدخل اسم الجلسة والرقم', 'error');
 
       const res = await fetch(`${API_BASE}/create-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, mode, phone: phoneNumber })
+        body: JSON.stringify({ sessionId, phone: phoneNumber })
       });
 
       const data = await res.json();
-      const qrContainer = document.getElementById('qrContainer');
+      const qrDiv = document.getElementById('qrContainer');
 
-      if (data.error) {
-        qrContainer.innerHTML = `<p style="color:#ef4444;">❌ ${data.error}</p>`;
-        return;
-      }
-
-      if (mode === 'qr' && data.qr) {
-        qrContainer.innerHTML = `
-          <p>✅ امسح الكود لربط الجلسة:</p>
-          <img src="${data.qr}" alt="QR Code">
+      if (data.pairingCode) {
+        currentCode = data.pairingCode;
+        qrDiv.innerHTML = `
+          <p>✅ رمز الاقتران:</p>
+          <p style="font-size: 24px; font-weight: bold;">${currentCode}</p>
+          <button class="copy-btn" onclick="copyCode()">📋 نسخ الرمز</button>
         `;
-      } else if (mode === 'pairing' && data.pairingCode) {
-        qrContainer.innerHTML = `
-          <p>✅ تم إنشاء الجلسة</p>
-          <div class="pairing-code" id="pairCode">${data.pairingCode}</div>
-          <button class="copy-btn" onclick="copyPairingCode()">📋 نسخ الرمز</button>
-          <p>أدخل هذا الرمز في تطبيق واتساب لتفعيل الجلسة.</p>
-        `;
+        showAlert('تم إنشاء الجلسة بنجاح ✅', 'success');
+      } else if (data.error) {
+        showAlert(data.error, 'error');
       } else {
-        qrContainer.innerHTML = `<p>ℹ️ لم يتم توليد رمز الاقتران أو QR.</p>`;
+        showAlert('حدث خطأ غير متوقع', 'error');
       }
 
       loadSessions();
     }
 
-    function copyPairingCode() {
-      const code = document.getElementById('pairCode').innerText;
-      navigator.clipboard.writeText(code)
-        .then(() => alert('✅ تم نسخ رمز الاقتران بنجاح'))
-        .catch(() => alert('❌ فشل النسخ، انسخه يدويًا'));
+    function copyCode() {
+      if (!currentCode) return;
+      navigator.clipboard.writeText(currentCode).then(() => {
+        showAlert('تم نسخ الرمز ✅');
+      });
     }
 
     async function loadSessions() {
@@ -175,7 +155,7 @@
       });
 
       const data = await res.json();
-      alert(data.message || data.error);
+      showAlert(data.message || data.error, data.message ? 'success' : 'error');
       loadSessions();
     }
 
