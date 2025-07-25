@@ -16,6 +16,7 @@ const PASSWORD = 'tarzanbot';
 const sessions = {};
 const msgStore = new Map();
 
+// ✅ الواجهة الأساسية
 app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -30,8 +31,8 @@ fs.readdirSync(commandsPath).forEach(file => {
   }
 });
 
-// ✅ بدء جلسة جديدة
-async function startSession(sessionId, res, phoneNumber = null) {
+// ✅ إنشاء جلسة جديدة
+async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = null) {
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
   fs.mkdirSync(sessionPath, { recursive: true });
 
@@ -46,33 +47,45 @@ async function startSession(sessionId, res, phoneNumber = null) {
   });
 
   sessions[sessionId] = sock;
-
   sock.ev.on('creds.update', saveCreds);
 
+  // ✅ وضع رمز الاقتران
+  if (mode === 'pairing' && !sock.authState.creds.registered) {
+    if (!phoneNumber) {
+      if (res) return res.json({ error: 'يرجى إدخال رقم الهاتف' });
+      return;
+    }
+    try {
+      let code = await sock.requestPairingCode(phoneNumber.replace(/[^0-9]/g, ''));
+      code = code?.match(/.{1,4}/g)?.join('-') || code;
+      if (res) return res.json({ pairingCode: code, sessionId });
+    } catch (err) {
+      console.error('❌ خطأ في توليد رمز الاقتران:', err.message);
+      if (res) return res.json({ error: 'تعذر توليد رمز الاقتران' });
+    }
+  }
+
+  // ✅ تحديثات الاتصال
   sock.ev.on('connection.update', async (update) => {
     const { connection, qr, lastDisconnect } = update;
 
-    // ✅ عرض QR في واجهة المستخدم
-    if (qr && res) {
+    if (mode === 'qr' && qr && res) {
       const qrData = await qrCode.toDataURL(qr);
       res.json({ qr: qrData });
       res = null;
     }
 
-    // ✅ عند إغلاق الاتصال
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-      if (shouldReconnect) startSession(sessionId);
+      if (shouldReconnect) startSession(sessionId, mode, phoneNumber);
       else delete sessions[sessionId];
     }
 
-    // ✅ عند الاتصال
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
       const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
 
       const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
-
 ✅ *تم ربط الجلسة بنجاح!*  
 🔑 *معرف الجلسة:* \`${sessionId}\`
 
@@ -80,7 +93,6 @@ async function startSession(sessionId, res, phoneNumber = null) {
 ━━━━━━━━━━━━━━━  
 • *tarzan* ⬅️ لعرض جميع الأوامر الجاهزة  
 ━━━━━━━━━━━━━━━  
-
 ⚡ *استمتع بالتجربة الآن!*`;
 
       await sock.sendMessage(selfId, {
@@ -111,7 +123,9 @@ async function startSession(sessionId, res, phoneNumber = null) {
           const type = Object.keys(stored.message)[0];
           const time = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
 
-          await sock.sendMessage(selfId, { text: `🚫 *تم حذف رسالة!*\n👤 *الاسم:* ${name}\n📱 *الرقم:* wa.me/${number}\n🕒 *الوقت:* ${time}\n📂 *نوع الرسالة:* ${type}` });
+          await sock.sendMessage(selfId, {
+            text: `🚫 *تم حذف رسالة!*\n👤 *الاسم:* ${name}\n📱 *الرقم:* wa.me/${number}\n🕒 *الوقت:* ${time}\n📂 *نوع الرسالة:* ${type}`
+          });
           await sock.sendMessage(selfId, { forward: stored });
         } catch (err) {
           console.error('❌ خطأ في منع الحذف:', err.message);
@@ -155,29 +169,23 @@ async function startSession(sessionId, res, phoneNumber = null) {
       }
     }
   });
-
-  // ✅ إذا تم تمرير رقم الهاتف، أنشئ رمز اقتران
-  if (phoneNumber) {
-    setTimeout(async () => {
-      try {
-        const code = await sock.requestPairingCode(phoneNumber);
-        console.log(`✅ رمز الاقتران لـ ${phoneNumber}: ${code}`);
-      } catch (err) {
-        console.error('❌ فشل إنشاء رمز الاقتران:', err.message);
-      }
-    }, 3000);
-  }
 }
 
-// ✅ API
+// ✅ API Endpoints
 app.post('/create-session', (req, res) => {
-  const { sessionId, phoneNumber } = req.body;
+  const { sessionId, mode, phone } = req.body;
   if (!sessionId) return res.json({ error: 'أدخل اسم الجلسة' });
   if (sessions[sessionId]) return res.json({ message: 'الجلسة موجودة مسبقاً' });
-  startSession(sessionId, res, phoneNumber);
+  if (mode === 'pairing') {
+    startSession(sessionId, 'pairing', phone, res);
+  } else {
+    startSession(sessionId, 'qr', null, res);
+  }
 });
 
-app.get('/sessions', (req, res) => res.json(Object.keys(sessions)));
+app.get('/sessions', (req, res) => {
+  res.json(Object.keys(sessions));
+});
 
 app.post('/delete-session', (req, res) => {
   const { sessionId, password } = req.body;
