@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>إدارة جلسات واتساب - طرزان الواقدي</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet" />
   <style>
     * { font-family: 'Cairo', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -28,14 +28,15 @@
     .qr-container img {
       margin-top: 15px; width: 250px; border-radius: 8px; border: 3px solid #38bdf8;
     }
-    .copy-btn {
-      margin-top: 10px;
-      background: #22c55e; color: #fff;
-      padding: 10px; border-radius: 8px;
-      cursor: pointer; font-weight: bold;
-      width: 100%;
+    .pairing-container {
+      margin-top: 15px; padding: 10px; background: #0f172a; border-radius: 8px;
+      word-wrap: break-word; font-size: 18px; font-weight: bold;
     }
-    .copy-btn:hover { background: #16a34a; }
+    .copy-btn {
+      margin-top: 10px; background: #16a34a; color: #fff;
+      padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 16px;
+    }
+    .copy-btn:hover { background: #15803d; }
     .sessions-list {
       margin-top: 20px; background: #0f172a; padding: 15px; border-radius: 10px; text-align: left;
     }
@@ -52,12 +53,6 @@
     .toggle {
       margin-top: 10px; color: #ccc; cursor: pointer; font-size: 14px;
     }
-    .alert {
-      margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 14px;
-      display: none;
-    }
-    .alert.success { background: #22c55e; color: #fff; }
-    .alert.error { background: #ef4444; color: #fff; }
   </style>
 </head>
 <body>
@@ -65,13 +60,15 @@
     <h1>إدارة جلسات واتساب</h1>
 
     <input type="text" id="sessionId" placeholder="أدخل اسم الجلسة">
-    <input type="text" id="phoneNumber" placeholder="أدخل رقم الهاتف مع رمز الدولة (+966...)">
+    <div id="extraFields" style="display: none;">
+      <input type="text" id="phoneNumber" placeholder="أدخل رقم الهاتف مع رمز الدولة (+966...)">
+    </div>
 
     <button onclick="createSession()">إنشاء الجلسة</button>
-
-    <div class="alert" id="alertBox"></div>
+    <div class="toggle" onclick="togglePairing()">🔗 تفعيل / إخفاء خيار رمز الاقتران</div>
 
     <div class="qr-container" id="qrContainer"></div>
+    <div class="pairing-container" id="pairingContainer" style="display:none;"></div>
 
     <div class="sessions-list">
       <h2>الجلسات النشطة:</h2>
@@ -81,51 +78,56 @@
 
   <script>
     const API_BASE = '';
-    let currentCode = '';
 
-    function showAlert(message, type = 'success') {
-      const alertBox = document.getElementById('alertBox');
-      alertBox.textContent = message;
-      alertBox.className = `alert ${type}`;
-      alertBox.style.display = 'block';
-      setTimeout(() => alertBox.style.display = 'none', 3000);
+    function togglePairing() {
+      const extra = document.getElementById('extraFields');
+      extra.style.display = extra.style.display === 'none' ? 'block' : 'none';
     }
 
     async function createSession() {
       const sessionId = document.getElementById('sessionId').value.trim();
       const phoneNumber = document.getElementById('phoneNumber').value.trim();
-      if (!sessionId || !phoneNumber) return showAlert('أدخل اسم الجلسة والرقم', 'error');
+      if (!sessionId) return alert('أدخل اسم الجلسة أولاً');
+
+      const mode = phoneNumber ? 'pairing' : 'qr';
 
       const res = await fetch(`${API_BASE}/create-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, phone: phoneNumber })
+        body: JSON.stringify({ sessionId, mode, phone: phoneNumber })
       });
 
       const data = await res.json();
-      const qrDiv = document.getElementById('qrContainer');
 
-      if (data.pairingCode) {
-        currentCode = data.pairingCode;
-        qrDiv.innerHTML = `
-          <p>✅ رمز الاقتران:</p>
-          <p style="font-size: 24px; font-weight: bold;">${currentCode}</p>
+      // ✅ إذا كان QR
+      if (data.qr) {
+        document.getElementById('pairingContainer').style.display = 'none';
+        document.getElementById('qrContainer').innerHTML = `
+          <p>✅ امسح الكود لربط الجلسة:</p>
+          <img src="${data.qr}" alt="QR Code">
+        `;
+      }
+      // ✅ إذا كان رمز اقتران
+      else if (data.pairingCode) {
+        document.getElementById('qrContainer').innerHTML = '';
+        document.getElementById('pairingContainer').style.display = 'block';
+        document.getElementById('pairingContainer').innerHTML = `
+          <p>✅ رمز الاقتران الخاص بك:</p>
+          <p id="pairCode">${data.pairingCode}</p>
           <button class="copy-btn" onclick="copyCode()">📋 نسخ الرمز</button>
         `;
-        showAlert('تم إنشاء الجلسة بنجاح ✅', 'success');
-      } else if (data.error) {
-        showAlert(data.error, 'error');
-      } else {
-        showAlert('حدث خطأ غير متوقع', 'error');
+      }
+      else {
+        alert(data.error || 'حدث خطأ');
       }
 
       loadSessions();
     }
 
     function copyCode() {
-      if (!currentCode) return;
-      navigator.clipboard.writeText(currentCode).then(() => {
-        showAlert('تم نسخ الرمز ✅');
+      const code = document.getElementById('pairCode').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('✅ تم نسخ الرمز بنجاح!');
       });
     }
 
@@ -155,7 +157,7 @@
       });
 
       const data = await res.json();
-      showAlert(data.message || data.error, data.message ? 'success' : 'error');
+      alert(data.message || data.error);
       loadSessions();
     }
 
