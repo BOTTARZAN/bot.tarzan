@@ -16,12 +16,12 @@ const PASSWORD = 'tarzanbot';
 const sessions = {};
 const msgStore = new Map();
 
-// ✅ الواجهة الأساسية
+// واجهة ثابتة و JSON body parsing
 app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ تحميل الأوامر
+// تحميل الأوامر
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 fs.readdirSync(commandsPath).forEach(file => {
@@ -31,7 +31,7 @@ fs.readdirSync(commandsPath).forEach(file => {
   }
 });
 
-// ✅ إنشاء جلسة جديدة
+// دالة بدء جلسة جديدة
 async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = null) {
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
   fs.mkdirSync(sessionPath, { recursive: true });
@@ -49,7 +49,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
   sessions[sessionId] = sock;
   sock.ev.on('creds.update', saveCreds);
 
-  // ✅ وضع رمز الاقتران
+  // توليد رمز الاقتران في وضع pairing
   if (mode === 'pairing' && !sock.authState.creds.registered) {
     if (!phoneNumber) {
       if (res) return res.json({ error: 'يرجى إدخال رقم الهاتف' });
@@ -65,7 +65,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
     }
   }
 
-  // ✅ تحديثات الاتصال
+  // تحديثات الاتصال وإعادة المحاولة مع تأخير 5 ثواني عند قطع الاتصال غير مسجل خروج
   sock.ev.on('connection.update', async (update) => {
     const { connection, qr, lastDisconnect } = update;
 
@@ -76,16 +76,26 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
     }
 
     if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-      if (shouldReconnect) startSession(sessionId, mode, phoneNumber);
-      else delete sessions[sessionId];
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = (statusCode !== DisconnectReason.loggedOut);
+      console.log(`⚠️ اتصال الجلسة ${sessionId} مقطوع. رمز الخطأ: ${statusCode}. إعادة الاتصال: ${shouldReconnect}`);
+
+      if (shouldReconnect) {
+        // تأخير 5 ثواني قبل إعادة الاتصال لتجنب الحلقات السريعة
+        setTimeout(() => startSession(sessionId, mode, phoneNumber), 5000);
+      } else {
+        delete sessions[sessionId];
+        console.log(`🗑️ تم حذف جلسة ${sessionId} بعد تسجيل الخروج.`);
+      }
     }
 
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
-      const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
 
-      const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
+      try {
+        const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
+
+        const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
 ✅ *تم ربط الجلسة بنجاح!*  
 🔑 *معرف الجلسة:* \`${sessionId}\`
 
@@ -95,20 +105,23 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
 ━━━━━━━━━━━━━━━  
 ⚡ *استمتع بالتجربة الآن!*`;
 
-      await sock.sendMessage(selfId, {
-        image: { url: 'https://b.top4top.io/p_3489wk62d0.jpg' },
-        caption: caption,
-        footer: "🤖 طرزان الواقدي - بوت الذكاء الاصطناعي ⚔️",
-        buttons: [
-          { buttonId: "help", buttonText: { displayText: "📋 عرض الأوامر" }, type: 1 },
-          { buttonId: "menu", buttonText: { displayText: "📦 قائمة الميزات" }, type: 1 }
-        ],
-        headerType: 4
-      });
+        await sock.sendMessage(selfId, {
+          image: { url: 'https://b.top4top.io/p_3489wk62d0.jpg' },
+          caption,
+          footer: "🤖 طرزان الواقدي - بوت الذكاء الاصطناعي ⚔️",
+          buttons: [
+            { buttonId: "help", buttonText: { displayText: "📋 عرض الأوامر" }, type: 1 },
+            { buttonId: "menu", buttonText: { displayText: "📦 قائمة الميزات" }, type: 1 }
+          ],
+          headerType: 4
+        });
+      } catch (e) {
+        console.error('❌ خطأ في إرسال رسالة الترحيب:', e.message);
+      }
     }
   });
 
-  // ✅ منع الحذف
+  // منع حذف الرسائل: إعادة إرسالها مع إشعار
   sock.ev.on('messages.update', async updates => {
     for (const { key, update } of updates) {
       if (update?.message === null && key?.remoteJid && !key.fromMe) {
@@ -119,7 +132,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
           const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
           const senderJid = key.participant || stored.key?.participant || key.remoteJid;
           const number = senderJid?.split('@')[0] || 'مجهول';
-          const name = stored.pushName || 'غير معروف';
+          const name = stored.pushName || stored.message?.pushName || 'غير معروف';
           const type = Object.keys(stored.message)[0];
           const time = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
 
@@ -134,7 +147,7 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
     }
   });
 
-  // ✅ استقبال الأوامر
+  // استقبال الأوامر والرد عليها
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.message) return;
@@ -171,11 +184,12 @@ async function startSession(sessionId, mode = 'qr', phoneNumber = null, res = nu
   });
 }
 
-// ✅ API Endpoints
+// API لإنشاء الجلسات
 app.post('/create-session', (req, res) => {
   const { sessionId, mode, phone } = req.body;
   if (!sessionId) return res.json({ error: 'أدخل اسم الجلسة' });
   if (sessions[sessionId]) return res.json({ message: 'الجلسة موجودة مسبقاً' });
+
   if (mode === 'pairing') {
     startSession(sessionId, 'pairing', phone, res);
   } else {
@@ -183,10 +197,12 @@ app.post('/create-session', (req, res) => {
   }
 });
 
+// عرض جميع الجلسات
 app.get('/sessions', (req, res) => {
   res.json(Object.keys(sessions));
 });
 
+// حذف جلسة مع التحقق من كلمة المرور
 app.post('/delete-session', (req, res) => {
   const { sessionId, password } = req.body;
   if (password !== PASSWORD) return res.json({ error: 'كلمة المرور غير صحيحة' });
@@ -194,11 +210,16 @@ app.post('/delete-session', (req, res) => {
 
   delete sessions[sessionId];
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
-  fs.rmSync(sessionPath, { recursive: true, force: true });
+  try {
+    fs.rmSync(sessionPath, { recursive: true, force: true });
+  } catch (err) {
+    console.error('❌ خطأ في حذف ملفات الجلسة:', err.message);
+  }
 
   res.json({ message: `تم حذف الجلسة ${sessionId} بنجاح` });
 });
 
+// بدء الاستماع على البورت
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`);
 });
