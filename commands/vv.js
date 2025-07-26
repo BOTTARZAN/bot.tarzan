@@ -1,13 +1,22 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
-module.exports = async ({ sock, msg, text }) => {
+module.exports = async ({ sock, msg, text, from }) => {
   if (text !== 'vv') return;
 
   const senderJid = msg.key.participant || msg.key.remoteJid;
-  const selfJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+  const senderNumber = senderJid.split('@')[0];
+
+  // ✅ جلب رقم صاحب الجلسة
+  const session = Object.values(global.sessions).find(s => s.sock === sock);
+  const ownerNumber = session?.owner;
+
+  if (!ownerNumber) {
+    await sock.sendMessage(senderJid, { text: '❌ لم يتم تحديد رقم مالك الجلسة.' }, { quoted: msg });
+    return;
+  }
 
   // ✅ التحقق من الصلاحية
-  if (senderJid !== selfJid) {
+  if (senderNumber !== ownerNumber) {
     await sock.sendMessage(senderJid, { text: '🚫 ليس لديك صلاحية لتنفيذ هذا الأمر' }, { quoted: msg });
     return;
   }
@@ -18,7 +27,7 @@ module.exports = async ({ sock, msg, text }) => {
     return;
   }
 
-  const mediaType = Object.keys(quoted)[0]; // imageMessage or videoMessage
+  const mediaType = Object.keys(quoted)[0];
   const viewOnceMsg = quoted[mediaType];
   const isViewOnce = viewOnceMsg?.viewOnce === true;
 
@@ -28,7 +37,6 @@ module.exports = async ({ sock, msg, text }) => {
   }
 
   try {
-    // ✅ تحميل الوسائط
     const mediaBuffer = await downloadMediaMessage(
       {
         key: msg.message.extendedTextMessage.contextInfo,
@@ -39,14 +47,13 @@ module.exports = async ({ sock, msg, text }) => {
       { logger: console }
     );
 
-    // ✅ إرسال النتيجة فقط للبوت نفسه
     if (mediaType === 'imageMessage') {
-      await sock.sendMessage(selfJid, {
+      await sock.sendMessage(senderJid, {
         image: mediaBuffer,
         caption: '✅ تم استعادة الصورة (عرض لمرة واحدة)',
       });
     } else if (mediaType === 'videoMessage') {
-      await sock.sendMessage(selfJid, {
+      await sock.sendMessage(senderJid, {
         video: mediaBuffer,
         caption: '✅ تم استعادة الفيديو (عرض لمرة واحدة)',
       });
