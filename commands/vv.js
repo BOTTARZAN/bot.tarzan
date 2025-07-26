@@ -1,65 +1,47 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
-module.exports = async ({ sock, msg, text, from }) => {
+module.exports = async ({ text, sock, msg, from, reply, sessionOwners, sessionId }) => {
   if (text !== 'vv') return;
 
+  const ownerJid = sessionOwners[sessionId];
   const senderJid = msg.key.participant || msg.key.remoteJid;
-  const senderNumber = senderJid.split('@')[0];
 
-  // ✅ جلب رقم صاحب الجلسة
-  const session = Object.values(global.sessions).find(s => s.sock === sock);
-  const ownerNumber = session?.owner;
-
-  if (!ownerNumber) {
-    await sock.sendMessage(senderJid, { text: '❌ لم يتم تحديد رقم مالك الجلسة.' }, { quoted: msg });
-    return;
-  }
-
-  // ✅ التحقق من الصلاحية
-  if (senderNumber !== ownerNumber) {
-    await sock.sendMessage(senderJid, { text: '🚫 ليس لديك صلاحية لتنفيذ هذا الأمر' }, { quoted: msg });
-    return;
+  if (senderJid !== ownerJid) {
+    return reply('🚫 ليس لديك صلاحية لتنفيذ هذا الأمر');
   }
 
   const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  if (!quoted) {
-    await sock.sendMessage(senderJid, { text: '⚠️ يرجى الرد على رسالة تحتوي على وسائط (عرض لمرة واحدة)' }, { quoted: msg });
-    return;
-  }
+  if (!quoted) return reply('⚠️ أرسل الرد على الوسائط (عرض لمرة واحدة) مع الأمر "vv"');
 
   const mediaType = Object.keys(quoted)[0];
   const viewOnceMsg = quoted[mediaType];
   const isViewOnce = viewOnceMsg?.viewOnce === true;
 
   if (!isViewOnce || (mediaType !== 'imageMessage' && mediaType !== 'videoMessage')) {
-    await sock.sendMessage(senderJid, { text: '⚠️ هذه الرسالة ليست وسائط عرض لمرة واحدة' }, { quoted: msg });
-    return;
+    return reply('⚠️ هذه ليست وسائط عرض لمرة واحدة');
   }
 
   try {
     const mediaBuffer = await downloadMediaMessage(
-      {
-        key: msg.message.extendedTextMessage.contextInfo,
-        message: quoted,
-      },
+      { key: msg.message.extendedTextMessage.contextInfo, message: quoted },
       'buffer',
       {},
       { logger: console }
     );
 
     if (mediaType === 'imageMessage') {
-      await sock.sendMessage(senderJid, {
+      await sock.sendMessage(ownerJid, {
         image: mediaBuffer,
-        caption: '✅ تم استعادة الصورة (عرض لمرة واحدة)',
+        caption: '✅ تم استعادة الصورة (عرض لمرة واحدة)'
       });
     } else if (mediaType === 'videoMessage') {
-      await sock.sendMessage(senderJid, {
+      await sock.sendMessage(ownerJid, {
         video: mediaBuffer,
-        caption: '✅ تم استعادة الفيديو (عرض لمرة واحدة)',
+        caption: '✅ تم استعادة الفيديو (عرض لمرة واحدة)'
       });
     }
-
   } catch (err) {
     console.error('❌ خطأ في استعادة الوسائط:', err);
+    reply('❌ حدث خطأ أثناء استعادة الوسائط');
   }
 };
