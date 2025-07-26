@@ -15,9 +15,8 @@ const PORT = process.env.PORT || 10000;
 const PASSWORD = 'tarzanbot';
 const sessions = {};
 const msgStore = new Map();
-const sessionOwners = {}; // ✅ تخزين رقم صاحب الجلسة
 
-// ✅ واجهة المستخدم
+// ✅ تحميل الواجهة
 app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -32,7 +31,7 @@ fs.readdirSync(commandsPath).forEach(file => {
   }
 });
 
-// ✅ دالة تشغيل الجلسة
+// ✅ تشغيل جلسة جديدة
 async function startSession(sessionId, res) {
   const sessionPath = path.join(__dirname, 'sessions', sessionId);
   fs.mkdirSync(sessionPath, { recursive: true });
@@ -48,9 +47,9 @@ async function startSession(sessionId, res) {
   });
 
   sessions[sessionId] = sock;
-
   sock.ev.on('creds.update', saveCreds);
 
+  // ✅ متابعة حالة الاتصال
   sock.ev.on('connection.update', async (update) => {
     const { connection, qr, lastDisconnect } = update;
 
@@ -68,9 +67,8 @@ async function startSession(sessionId, res) {
 
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
-      const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
 
-      sessionOwners[sessionId] = selfId; // ✅ تخزين الرقم المرتبط
+      const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
 
       const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
 
@@ -121,7 +119,7 @@ async function startSession(sessionId, res) {
     }
   });
 
-  // ✅ استقبال الأوامر
+  // ✅ استقبال الرسائل وتنفيذ الأوامر
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.message) return;
@@ -150,7 +148,7 @@ async function startSession(sessionId, res) {
 
     for (const command of commands) {
       try {
-        await command({ text, reply, sock, msg, from, sessionOwners, sessionId });
+        await command({ text, reply, sock, msg, from });
       } catch (err) {
         console.error('❌ خطأ أثناء تنفيذ الأمر:', err);
       }
