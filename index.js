@@ -15,6 +15,7 @@ const PORT = process.env.PORT || 10000;
 const PASSWORD = 'tarzanbot';
 const sessions = {};
 const msgStore = new Map();
+const sessionOwners = {}; // ✅ تخزين رقم صاحب الجلسة
 
 // ✅ واجهة المستخدم
 app.use(express.static('public'));
@@ -68,6 +69,8 @@ async function startSession(sessionId, res) {
     if (connection === 'open') {
       console.log(`✅ جلسة ${sessionId} متصلة`);
       const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
+
+      sessionOwners[sessionId] = selfId; // ✅ تخزين الرقم المرتبط
 
       const caption = `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
 
@@ -147,7 +150,7 @@ async function startSession(sessionId, res) {
 
     for (const command of commands) {
       try {
-        await command({ text, reply, sock, msg, from });
+        await command({ text, reply, sock, msg, from, sessionOwners, sessionId });
       } catch (err) {
         console.error('❌ خطأ أثناء تنفيذ الأمر:', err);
       }
