@@ -3,46 +3,96 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>طلب رمز الاقتران</title>
+<title>رمز الاقتران - طرزان الواقدي</title>
 <style>
-  body { font-family: Arial; background: #0f2027; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; }
-  .box { background: #1e293b; padding: 20px; border-radius: 10px; text-align: center; width: 300px; }
-  input, button { width: 100%; margin: 10px 0; padding: 10px; border-radius: 5px; border: none; font-size: 16px; }
-  button { background: #38bdf8; color: white; cursor: pointer; }
-  #code { margin-top: 15px; font-size: 20px; font-weight: bold; }
-  .copy { cursor: pointer; background: #4ade80; margin-top: 10px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #000;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+.container h2 { margin-bottom: 15px; }
+input, button {
+    width: 100%; padding: 12px; margin: 8px 0;
+    border-radius: 8px; border: none; font-size: 16px;
+}
+input { color: #000; }
+button {
+    background: linear-gradient(90deg, #8a2be2, #4b0082);
+    color: white; font-weight: bold; cursor: pointer;
+    transition: background 0.3s;
+}
+button:hover {
+    background: linear-gradient(90deg, #32CD32, #228B22);
+    color: yellow;
+}
+#codeBox {
+    margin-top: 15px; font-size: 20px; font-weight: bold;
+}
+.copyBtn {
+    display: none; background: #4ade80; color: #000; margin-top: 10px;
+}
 </style>
 </head>
 <body>
-<div class="box">
-  <h2>أدخل رقمك</h2>
-  <input type="text" id="phone" placeholder="+966500000000">
-  <button onclick="getCode()">احصل على الرمز</button>
-  <div id="code"></div>
-  <button id="copyBtn" class="copy" style="display:none;" onclick="copyCode()">نسخ الرمز</button>
+<div class="container">
+    <h2>أدخل رقم واتساب</h2>
+    <input type="text" id="phone" placeholder="+966500000000">
+    <button id="getCodeBtn">احصل على الرمز</button>
+    <div id="codeBox"></div>
+    <button id="copyBtn" class="copyBtn">📋 نسخ الرمز</button>
 </div>
 <script>
-async function getCode() {
-  const phone = document.getElementById('phone').value;
-  const res = await fetch('/create-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: 'tarzan', mode: 'pairing', phone })
-  });
-  const data = await res.json();
-  if (data.pairingCode) {
-    document.getElementById('code').innerText = `الرمز: ${data.pairingCode}`;
-    document.getElementById('copyBtn').style.display = 'block';
-  } else {
-    document.getElementById('code').innerText = 'حدث خطأ!';
-  }
-}
+const btn = document.getElementById('getCodeBtn');
+const copyBtn = document.getElementById('copyBtn');
+const codeBox = document.getElementById('codeBox');
 
-function copyCode() {
-  const text = document.getElementById('code').innerText.replace('الرمز: ', '');
-  navigator.clipboard.writeText(text);
-  alert('تم نسخ الرمز!');
-}
+btn.addEventListener('click', async () => {
+    const phone = document.getElementById('phone').value;
+    if (!phone) {
+        codeBox.innerHTML = '<p style="color:red">❌ أدخل رقم الهاتف</p>';
+        return;
+    }
+    codeBox.innerHTML = '<p style="color:yellow">⏳ جاري توليد الرمز...</p>';
+    copyBtn.style.display = 'none';
+
+    try {
+        const res = await fetch('/create-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (data.pairingCode) {
+            codeBox.innerHTML = `<p style="color:white">✅ الرمز: <span id="pairCode">${data.pairingCode}</span></p>`;
+            copyBtn.style.display = 'block';
+        } else {
+            codeBox.innerHTML = '<p style="color:red">❌ حدث خطأ</p>';
+        }
+    } catch (err) {
+        codeBox.innerHTML = '<p style="color:red">❌ فشل الاتصال</p>';
+    }
+});
+
+copyBtn.addEventListener('click', () => {
+    const text = document.getElementById('pairCode').innerText;
+    navigator.clipboard.writeText(text);
+    alert('تم نسخ الرمز بنجاح!');
+});
 </script>
 </body>
 </html>
