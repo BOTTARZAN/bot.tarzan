@@ -3,54 +3,98 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة جلسات واتساب - طرزان الواقدي</title>
+  <title>مرحبآ بك في موقع ربط بوت طـــــــرزان الواقدي</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
   <style>
-    * { font-family: 'Cairo', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      font-family: 'Cairo', sans-serif;
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
     body {
       background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      color: #fff; display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; padding: 20px;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
     }
     .container {
-      width: 100%; max-width: 520px;
-      background: #1e293b; padding: 25px; border-radius: 12px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.6); text-align: center;
+      width: 100%;
+      max-width: 500px;
+      background: #1e293b;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      text-align: center;
     }
-    h1 { margin-bottom: 15px; color: #38bdf8; font-size: 26px; }
+    h1 {
+      margin-bottom: 15px;
+      color: #38bdf8;
+      font-size: 26px;
+    }
     input, button {
-      width: 100%; padding: 10px; margin-top: 10px;
-      border-radius: 8px; border: none; font-size: 16px;
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
     }
-    input { background: #f1f5f9; color: #111; }
+    input {
+      background: #f1f5f9;
+      color: #111;
+    }
     button {
-      background: #38bdf8; color: #fff; font-weight: bold; cursor: pointer;
+      background: #38bdf8;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
       transition: 0.3s;
     }
-    button:hover { background: #0ea5e9; }
+    button:hover {
+      background: #0ea5e9;
+    }
     .qr-container img {
-      margin-top: 15px; width: 250px;
-      border-radius: 8px; border: 3px solid #38bdf8;
+      margin-top: 15px;
+      width: 250px;
+      border-radius: 8px;
+      border: 3px solid #38bdf8;
     }
-    /* ✅ نافذة منبثقة */
-    .popup {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.8); justify-content: center; align-items: center; z-index: 1000;
+    .sessions-list {
+      margin-top: 20px;
+      background: #0f172a;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: left;
     }
-    .popup-content {
-      background: #1e293b; padding: 20px; border-radius: 12px;
-      width: 90%; max-width: 400px; text-align: center;
+    .sessions-list h2 {
+      color: #38bdf8;
+      font-size: 20px;
+      margin-bottom: 10px;
+      text-align: center;
     }
-    .popup-content h2 { margin-bottom: 10px; color: #38bdf8; }
     .session-item {
-      background: #334155; margin: 5px 0; padding: 10px; border-radius: 8px;
-      display: flex; justify-content: space-between; color: #fff;
+      display: flex;
+      justify-content: space-between;
+      background: #1e293b;
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 8px;
+      font-size: 14px;
     }
-    .close-btn {
-      background: #ef4444; padding: 8px 15px; border-radius: 6px;
-      color: #fff; border: none; cursor: pointer; margin-top: 10px;
+    .delete-btn {
+      background: #ef4444;
+      padding: 5px 10px;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      border: none;
+      transition: 0.3s;
     }
-    .close-btn:hover { background: #dc2626; }
+    .delete-btn:hover {
+      background: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -58,19 +102,15 @@
     <h1>إدارة جلسات واتساب</h1>
 
     <input type="text" id="sessionId" placeholder="أدخل اسم الجلسة">
-    <input type="text" id="ownerNumber" placeholder="أدخل رقم المالك مع كود الدولة">
     <button onclick="createSession()">إنشاء الجلسة</button>
-    <button onclick="showPopup()">📋 عرض الجلسات المتصلة</button>
 
     <div class="qr-container" id="qrContainer"></div>
-  </div>
 
-  <!-- ✅ نافذة منبثقة للجلسات -->
-  <div class="popup" id="popup">
-    <div class="popup-content">
-      <h2>الجلسات النشطة</h2>
-      <div id="sessionsList">جارٍ التحميل...</div>
-      <button class="close-btn" onclick="closePopup()">إغلاق</button>
+    <button style="margin-top:15px;background:#22c55e;" onclick="loadSessions()">عرض الجلسات النشطة</button>
+
+    <div class="sessions-list">
+      <h2>الجلسات النشطة:</h2>
+      <div id="sessions"></div>
     </div>
   </div>
 
@@ -79,17 +119,12 @@
 
     async function createSession() {
       const sessionId = document.getElementById('sessionId').value.trim();
-      const ownerNumber = document.getElementById('ownerNumber').value.trim();
-
-      if (!sessionId || !ownerNumber) {
-        alert('أدخل اسم الجلسة ورقم المالك');
-        return;
-      }
+      if (!sessionId) return alert('أدخل اسم الجلسة أولاً');
 
       const res = await fetch(`${API_BASE}/create-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, owner: ownerNumber })
+        body: JSON.stringify({ sessionId })
       });
 
       const data = await res.json();
@@ -98,33 +133,47 @@
           <p>امسح الكود لربط الجلسة:</p>
           <img src="${data.qr}" alt="QR Code">
         `;
+        loadSessions();
       } else {
-        alert(data.message || 'حدث خطأ');
+        alert(data.message || data.error || 'حدث خطأ');
       }
     }
 
     async function loadSessions() {
       const res = await fetch(`${API_BASE}/sessions`);
       const sessions = await res.json();
-      const container = document.getElementById('sessionsList');
+      const container = document.getElementById('sessions');
       container.innerHTML = '';
+      if (sessions.length === 0) {
+        container.innerHTML = '<p>لا توجد جلسات نشطة حالياً</p>';
+        return;
+      }
       sessions.forEach(s => {
         container.innerHTML += `
           <div class="session-item">
             <span>${s}</span>
+            <button class="delete-btn" onclick="deleteSession('${s}')">حذف</button>
           </div>
         `;
       });
     }
 
-    function showPopup() {
-      document.getElementById('popup').style.display = 'flex';
+    async function deleteSession(sessionId) {
+      const password = prompt('أدخل كلمة المرور لحذف الجلسة:');
+      if (!password) return;
+
+      const res = await fetch(`${API_BASE}/delete-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, password })
+      });
+
+      const data = await res.json();
+      alert(data.message || data.error);
       loadSessions();
     }
 
-    function closePopup() {
-      document.getElementById('popup').style.display = 'none';
-    }
+    loadSessions();
   </script>
 </body>
 </html>
