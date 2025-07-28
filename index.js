@@ -162,20 +162,22 @@ const startSock = async (sessionId) => {
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
-        if (!number || !sessionId) return res.status(400).json({ error: 'أدخل الرقم ومعرف الجلسة' });
+        if (!number || !sessionId) return res.status(400).json({ error: '❌ أدخل الرقم ومعرف الجلسة' });
 
         let sock = sessions.get(sessionId);
         if (!sock) sock = await startSock(sessionId);
 
         if (sock.authState.creds.registered) {
-            return res.status(400).json({ error: 'الجلسة مرتبطة بالفعل' });
+            return res.status(400).json({ error: '⚠️ الجلسة مرتبطة بالفعل' });
         }
 
         const code = await sock.requestPairingCode(number.trim());
+        if (!code) throw new Error('فشل الحصول على رمز من واتساب');
         return res.json({ pairingCode: code, qrImage: `/${sessionId}_qr.png` });
+
     } catch (err) {
         console.error('❌ خطأ في توليد الرمز:', err);
-        res.status(500).json({ error: 'فشل إنشاء الرمز' });
+        res.status(500).json({ error: '⚠️ فشل إنشاء الرمز، السبب: ' + err.message });
     }
 });
 
@@ -194,7 +196,7 @@ app.get('/sessions', (req, res) => {
 // ✅ حذف جلسة معينة
 app.post('/delete-session/:id', async (req, res) => {
     const { id } = req.params;
-    if (!sessions.has(id)) return res.status(404).json({ error: 'الجلسة غير موجودة' });
+    if (!sessions.has(id)) return res.status(404).json({ error: '❌ الجلسة غير موجودة' });
 
     const sock = sessions.get(id);
     await sock.ws.close();
