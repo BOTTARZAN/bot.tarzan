@@ -1,184 +1,359 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>إدارة جلسات واتساب - طرزان الواقدي</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
-  <style>
-    * {
-      font-family: 'Cairo', sans-serif;
-      margin: 0; padding: 0; box-sizing: border-box;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>طرزان الواقدي | نظام الإقتران</title>
+<style>
     body {
-      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      color: #fff;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
+        margin: 0;
+        padding: 0;
+        font-family: 'Courier New', monospace;
+        background: #000;
+        color: #00ff9d;
+        text-align: center;
+        overflow: hidden;
     }
+
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: -1;
+    }
+
     .container {
-      width: 100%;
-      max-width: 500px;
-      background: #1e293b;
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
-      text-align: center;
+        max-width: 550px;
+        margin: 40px auto;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 25px;
+        border-radius: 15px;
+        border: 2px solid #00ff9d;
+        box-shadow: 0 0 30px #00ff9d;
     }
+
     h1 {
-      margin-bottom: 15px;
-      color: #38bdf8;
-      font-size: 26px;
+        font-size: 32px;
+        margin-bottom: 20px;
+        text-shadow: 0 0 15px #00ff9d;
     }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      border-radius: 8px;
-      border: none;
-      font-size: 16px;
+
+    .status {
+        font-size: 18px;
+        margin: 10px 0;
+        color: #00ff9d;
     }
-    input {
-      background: #f1f5f9;
-      color: #111;
+
+    input[type="text"] {
+        width: 90%;
+        padding: 10px;
+        margin: 10px 0;
+        background: #111;
+        color: #00ff9d;
+        border: 1px solid #00ff9d;
+        border-radius: 5px;
+        text-align: center;
+        font-size: 16px;
     }
+
     button {
-      background: #38bdf8;
-      color: #fff;
-      font-weight: bold;
-      cursor: pointer;
+        padding: 10px 20px;
+        background: #00ff9d;
+        color: #000;
+        border: none;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 5px;
+        transition: 0.3s;
     }
+
     button:hover {
-      background: #0ea5e9;
+        background: #00cc7d;
     }
-    .qr-container img {
-      margin-top: 15px;
-      width: 250px;
-      border-radius: 8px;
-      border: 3px solid #38bdf8;
+
+    #sessionsList {
+        margin-top: 20px;
+        text-align: left;
+        font-size: 14px;
+        color: #00ff9d;
     }
-    .sessions-list {
-      margin-top: 20px;
-      background: #0f172a;
-      padding: 15px;
-      border-radius: 10px;
-      text-align: left;
-    }
-    .sessions-list h2 {
-      color: #38bdf8;
-      font-size: 20px;
-      margin-bottom: 10px;
-    }
+
     .session-item {
-      display: flex;
-      justify-content: space-between;
-      background: #1e293b;
-      padding: 8px;
-      margin: 5px 0;
-      border-radius: 8px;
-      align-items: center;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #111;
+        padding: 8px;
+        margin: 5px 0;
+        border-radius: 6px;
+        border: 1px solid #00ff9d;
     }
-    .delete-btn {
-      background: #ef4444;
-      padding: 5px 10px;
-      border-radius: 6px;
-      color: #fff;
-      cursor: pointer;
-      border: none;
+
+    .delete-session-btn {
+        background: #ff3333;
+        color: #fff;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 5px;
+        cursor: pointer;
     }
-    .delete-btn:hover {
-      background: #dc2626;
+
+    .delete-session-btn:hover {
+        background: #cc0000;
     }
-    .refresh-btn {
-      background: #10b981;
-      margin-top: 10px;
+
+    footer {
+        margin-top: 20px;
+        font-size: 14px;
+        color: #00ff9d;
+        text-shadow: 0 0 10px #00ff9d;
     }
-    .refresh-btn:hover {
-      background: #059669;
+
+    /* Modal styles */
+    #modalOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
     }
-  </style>
+
+    #modalContent {
+        background: #000;
+        border: 2px solid #00ff9d;
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        width: 330px;
+        box-shadow: 0 0 40px #00ff9d;
+        color: #00ff9d;
+        font-family: monospace;
+        position: relative;
+    }
+
+    #modalContent img {
+        width: 250px;
+        height: 250px;
+        border-radius: 10px;
+        border: 2px solid #00ff9d;
+        margin-bottom: 15px;
+    }
+
+    .pairCodeDisplay {
+        font-size: 18px;
+        background: #111;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #00ff9d;
+        word-break: break-all;
+        user-select: all;
+        margin-bottom: 10px;
+    }
+
+    #closeModalBtn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #00ff9d;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    #closeModalBtn:hover {
+        background: #00cc7d;
+    }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>إدارة جلسات واتساب</h1>
+<canvas id="matrix"></canvas>
 
-    <input type="text" id="sessionId" placeholder="أدخل اسم الجلسة">
-    <button onclick="createSession()">إنشاء الجلسة</button>
+<div class="container">
+    <h1>⚡ طرزان الواقدي ⚡</h1>
+    <p class="status">🔍 حالة الجلسة: <span id="sessionStatus">جاري التحقق...</span></p>
 
-    <div class="qr-container" id="qrContainer"></div>
+    <input type="text" id="sessionId" placeholder="أدخل معرف الجلسة (مثال: tarzanalwaqdiy)" />
+    <input type="text" id="phone" placeholder="أدخل رقمك مثل 9665xxxxxxx" />
+    <br>
+    <button id="pairBtn">طلب الرمز</button>
+    <button id="reloadQRBtn">🔄 إعادة تحميل QR</button>
+    <button id="deleteSessionBtn">🗑 حذف الجلسة الحالية</button>
 
-    <button class="refresh-btn" onclick="loadSessions()">🔄 عرض الجلسات النشطة</button>
+    <div id="sessionsList"></div>
+</div>
 
-    <div class="sessions-list">
-      <h2>الجلسات النشطة:</h2>
-      <div id="sessions">لا توجد جلسات حالياً...</div>
+<footer>💻 تصميم هاكرزي حصري بواسطة طرزان الواقدي ⚔️</footer>
+
+<!-- Modal for QR + Pairing Code -->
+<div id="modalOverlay">
+    <div id="modalContent">
+        <button id="closeModalBtn">×</button>
+        <h2>رمز الاقتران ومعرف الجلسة</h2>
+        <img id="modalQR" src="" alt="QR Code" />
+        <div class="pairCodeDisplay" id="modalPairCode"></div>
+        <div class="pairCodeDisplay" id="modalSessionId"></div>
     </div>
-  </div>
+</div>
 
-  <script>
-    const API_BASE = '';
+<audio id="successSound" src="https://www.soundjay.com/buttons/button-09.mp3"></audio>
 
-    async function createSession() {
-      const sessionId = document.getElementById('sessionId').value.trim();
-      if (!sessionId) return alert('أدخل اسم الجلسة أولاً');
+<script>
+// Matrix خلفية
+const canvas = document.getElementById('matrix');
+const ctx = canvas.getContext('2d');
+canvas.height = window.innerHeight;
+canvas.width = window.innerWidth;
 
-      const res = await fetch(`${API_BASE}/create-session`, {
+const letters = "01 TARZAN BOT ";
+const fontSize = 16;
+const columns = canvas.width / fontSize;
+const drops = Array(Math.floor(columns)).fill(1);
+
+function draw() {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#00ff9d";
+    ctx.font = fontSize + "px monospace";
+
+    for (let i = 0; i < drops.length; i++) {
+        const text = letters[Math.floor(Math.random() * letters.length)];
+        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+            drops[i] = 0;
+        }
+        drops[i]++;
+    }
+}
+setInterval(draw, 35);
+
+// عناصر DOM
+const sessionIdInput = document.getElementById('sessionId');
+const phoneInput = document.getElementById('phone');
+const pairBtn = document.getElementById('pairBtn');
+const reloadQRBtn = document.getElementById('reloadQRBtn');
+const deleteSessionBtn = document.getElementById('deleteSessionBtn');
+const modalOverlay = document.getElementById('modalOverlay');
+const modalQR = document.getElementById('modalQR');
+const modalPairCode = document.getElementById('modalPairCode');
+const modalSessionId = document.getElementById('modalSessionId');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const sessionsList = document.getElementById('sessionsList');
+
+closeModalBtn.addEventListener('click', () => {
+    modalOverlay.style.display = 'none';
+});
+
+async function checkSession() {
+    try {
+        const res = await fetch('/sessions');
+        const sessions = await res.json();
+        const statusEl = document.getElementById('sessionStatus');
+
+        if (sessions.length > 0) {
+            statusEl.textContent = "✅ يوجد جلسة متصلة";
+            displaySessions(sessions);
+        } else {
+            statusEl.textContent = "❌ لا توجد جلسة نشطة";
+            sessionsList.innerHTML = '';
+        }
+    } catch {
+        document.getElementById('sessionStatus').textContent = "⚠️ خطأ في التحقق";
+    }
+}
+
+function displaySessions(sessions) {
+    sessionsList.innerHTML = '';
+    sessions.forEach(session => {
+        const div = document.createElement('div');
+        div.className = 'session-item';
+
+        const span = document.createElement('span');
+        span.textContent = session;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-session-btn';
+        deleteBtn.textContent = 'حذف';
+        deleteBtn.onclick = async () => {
+            const password = prompt('أدخل كلمة المرور لحذف الجلسة:');
+            if (!password) return;
+            const res = await fetch('/delete-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            checkSession();
+        };
+
+        div.appendChild(span);
+        div.appendChild(deleteBtn);
+        sessionsList.appendChild(div);
+    });
+}
+
+// طلب رمز Pairing Code
+pairBtn.addEventListener('click', async () => {
+    const sessionId = sessionIdInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    if (!sessionId) return alert("❌ أدخل معرف الجلسة");
+    if (!phone) return alert("❌ أدخل رقم الهاتف");
+
+    try {
+        const res = await fetch('/pair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: phone, sessionId })
+        });
+
+        const data = await res.json();
+        if (data.pairingCode) {
+            modalQR.src = '/qr.png?' + Date.now();
+            modalPairCode.textContent = "رمز الاقتران: " + data.pairingCode;
+            modalSessionId.textContent = "معرف الجلسة: " + sessionId;
+            modalOverlay.style.display = 'flex';
+            document.getElementById('successSound').play();
+        } else {
+            alert(data.error || "حدث خطأ");
+        }
+    } catch {
+        alert("❌ فشل الاتصال بالخادم");
+    }
+});
+
+reloadQRBtn.addEventListener('click', () => {
+    modalQR.src = '/qr.png?' + Date.now();
+});
+
+deleteSessionBtn.addEventListener('click', async () => {
+    const password = prompt("أدخل كلمة المرور لحذف الجلسة:");
+    if (!password) return;
+    const res = await fetch('/delete-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId })
-      });
+        body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    alert(data.message || data.error);
+    checkSession();
+});
 
-      const data = await res.json();
-      if (data.qr) {
-        document.getElementById('qrContainer').innerHTML = `
-          <p>📷 امسح الكود لربط الجلسة:</p>
-          <img src="${data.qr}" alt="QR Code">
-        `;
-        loadSessions();
-      } else {
-        alert(data.message || 'حدث خطأ أثناء إنشاء الجلسة');
-      }
-    }
-
-    async function loadSessions() {
-      const res = await fetch(`${API_BASE}/sessions`);
-      const sessions = await res.json();
-      const container = document.getElementById('sessions');
-      container.innerHTML = '';
-      if (sessions.length === 0) {
-        container.innerHTML = '<p>❌ لا توجد جلسات حالياً</p>';
-        return;
-      }
-      sessions.forEach(s => {
-        container.innerHTML += `
-          <div class="session-item">
-            <span>📱 ${s}</span>
-            <button class="delete-btn" onclick="deleteSession('${s}')">حذف</button>
-          </div>
-        `;
-      });
-    }
-
-    async function deleteSession(sessionId) {
-      const password = prompt('أدخل كلمة المرور لحذف الجلسة:');
-      if (!password) return;
-
-      const res = await fetch(`${API_BASE}/delete-session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, password })
-      });
-
-      const data = await res.json();
-      alert(data.message || data.error);
-      loadSessions();
-    }
-
-    // تحميل الجلسات عند فتح الصفحة
-    loadSessions();
-  </script>
+checkSession();
+setInterval(checkSession, 7000);
+</script>
 </body>
 </html>
