@@ -12,7 +12,7 @@
         background: #000;
         color: #00ff9d;
         text-align: center;
-        overflow: hidden;
+        overflow-x: hidden;
     }
 
     canvas {
@@ -23,9 +23,9 @@
     }
 
     .container {
-        max-width: 550px;
+        max-width: 600px;
         margin: 40px auto;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.9);
         padding: 25px;
         border-radius: 15px;
         border: 2px solid #00ff9d;
@@ -38,16 +38,10 @@
         text-shadow: 0 0 15px #00ff9d;
     }
 
-    .status {
-        font-size: 18px;
-        margin: 10px 0;
-        color: #00ff9d;
-    }
-
     input[type="text"] {
         width: 90%;
-        padding: 10px;
-        margin: 10px 0;
+        padding: 12px;
+        margin: 8px 0;
         background: #111;
         color: #00ff9d;
         border: 1px solid #00ff9d;
@@ -78,6 +72,9 @@
         text-align: left;
         font-size: 14px;
         color: #00ff9d;
+        max-height: 250px;
+        overflow-y: auto;
+        padding-right: 10px;
     }
 
     .session-item {
@@ -89,6 +86,7 @@
         margin: 5px 0;
         border-radius: 6px;
         border: 1px solid #00ff9d;
+        font-size: 14px;
     }
 
     .delete-session-btn {
@@ -118,7 +116,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.8);
+        background: rgba(0,0,0,0.85);
         display: none;
         justify-content: center;
         align-items: center;
@@ -131,7 +129,7 @@
         padding: 20px;
         border-radius: 15px;
         text-align: center;
-        width: 330px;
+        width: 350px;
         box-shadow: 0 0 40px #00ff9d;
         color: #00ff9d;
         font-family: monospace;
@@ -183,21 +181,18 @@
 
 <div class="container">
     <h1>⚡ طرزان الواقدي ⚡</h1>
-    <p class="status">🔍 حالة الجلسة: <span id="sessionStatus">جاري التحقق...</span></p>
-
     <input type="text" id="sessionId" placeholder="أدخل معرف الجلسة (مثال: tarzanalwaqdiy)" />
     <input type="text" id="phone" placeholder="أدخل رقمك مثل 9665xxxxxxx" />
     <br>
     <button id="pairBtn">طلب الرمز</button>
-    <button id="reloadQRBtn">🔄 إعادة تحميل QR</button>
-    <button id="deleteSessionBtn">🗑 حذف الجلسة الحالية</button>
 
+    <h3>📋 الجلسات النشطة:</h3>
     <div id="sessionsList"></div>
 </div>
 
 <footer>💻 تصميم هاكرزي حصري بواسطة طرزان الواقدي ⚔️</footer>
 
-<!-- Modal for QR + Pairing Code -->
+<!-- Modal -->
 <div id="modalOverlay">
     <div id="modalContent">
         <button id="closeModalBtn">×</button>
@@ -208,15 +203,12 @@
     </div>
 </div>
 
-<audio id="successSound" src="https://www.soundjay.com/buttons/button-09.mp3"></audio>
-
 <script>
-// Matrix خلفية
+// خلفية Matrix
 const canvas = document.getElementById('matrix');
 const ctx = canvas.getContext('2d');
 canvas.height = window.innerHeight;
 canvas.width = window.innerWidth;
-
 const letters = "01 TARZAN BOT ";
 const fontSize = 16;
 const columns = canvas.width / fontSize;
@@ -239,12 +231,10 @@ function draw() {
 }
 setInterval(draw, 35);
 
-// عناصر DOM
+// DOM Elements
 const sessionIdInput = document.getElementById('sessionId');
 const phoneInput = document.getElementById('phone');
 const pairBtn = document.getElementById('pairBtn');
-const reloadQRBtn = document.getElementById('reloadQRBtn');
-const deleteSessionBtn = document.getElementById('deleteSessionBtn');
 const modalOverlay = document.getElementById('modalOverlay');
 const modalQR = document.getElementById('modalQR');
 const modalPairCode = document.getElementById('modalPairCode');
@@ -256,104 +246,55 @@ closeModalBtn.addEventListener('click', () => {
     modalOverlay.style.display = 'none';
 });
 
-async function checkSession() {
-    try {
-        const res = await fetch('/sessions');
-        const sessions = await res.json();
-        const statusEl = document.getElementById('sessionStatus');
-
-        if (sessions.length > 0) {
-            statusEl.textContent = "✅ يوجد جلسة متصلة";
-            displaySessions(sessions);
-        } else {
-            statusEl.textContent = "❌ لا توجد جلسة نشطة";
-            sessionsList.innerHTML = '';
-        }
-    } catch {
-        document.getElementById('sessionStatus').textContent = "⚠️ خطأ في التحقق";
-    }
-}
-
-function displaySessions(sessions) {
+async function loadSessions() {
+    const res = await fetch('/sessions');
+    const sessions = await res.json();
     sessionsList.innerHTML = '';
     sessions.forEach(session => {
         const div = document.createElement('div');
         div.className = 'session-item';
-
-        const span = document.createElement('span');
-        span.textContent = session;
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-session-btn';
-        deleteBtn.textContent = 'حذف';
-        deleteBtn.onclick = async () => {
-            const password = prompt('أدخل كلمة المرور لحذف الجلسة:');
-            if (!password) return;
-            const res = await fetch('/delete-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
-            const data = await res.json();
-            alert(data.message || data.error);
-            checkSession();
-        };
-
-        div.appendChild(span);
-        div.appendChild(deleteBtn);
+        div.innerHTML = `
+            <span>${session.sessionId} - ${session.user}</span>
+            <button class="delete-session-btn" onclick="deleteSession('${session.sessionId}')">حذف</button>
+        `;
         sessionsList.appendChild(div);
     });
 }
 
-// طلب رمز Pairing Code
+async function deleteSession(id) {
+    const confirmDelete = confirm(`هل تريد حذف الجلسة: ${id}؟`);
+    if (!confirmDelete) return;
+
+    const res = await fetch(`/delete-session/${id}`, { method: 'POST' });
+    const data = await res.json();
+    alert(data.message || data.error);
+    loadSessions();
+}
+
 pairBtn.addEventListener('click', async () => {
     const sessionId = sessionIdInput.value.trim();
     const phone = phoneInput.value.trim();
+    if (!sessionId || !phone) return alert("❌ أدخل معرف الجلسة ورقم الهاتف");
 
-    if (!sessionId) return alert("❌ أدخل معرف الجلسة");
-    if (!phone) return alert("❌ أدخل رقم الهاتف");
+    const res = await fetch('/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: phone, sessionId })
+    });
 
-    try {
-        const res = await fetch('/pair', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ number: phone, sessionId })
-        });
-
-        const data = await res.json();
-        if (data.pairingCode) {
-            modalQR.src = '/qr.png?' + Date.now();
-            modalPairCode.textContent = "رمز الاقتران: " + data.pairingCode;
-            modalSessionId.textContent = "معرف الجلسة: " + sessionId;
-            modalOverlay.style.display = 'flex';
-            document.getElementById('successSound').play();
-        } else {
-            alert(data.error || "حدث خطأ");
-        }
-    } catch {
-        alert("❌ فشل الاتصال بالخادم");
+    const data = await res.json();
+    if (data.pairingCode) {
+        modalQR.src = data.qrImage;
+        modalPairCode.textContent = "رمز الاقتران: " + data.pairingCode;
+        modalSessionId.textContent = "معرف الجلسة: " + sessionId;
+        modalOverlay.style.display = 'flex';
+    } else {
+        alert(data.error || "حدث خطأ");
     }
 });
 
-reloadQRBtn.addEventListener('click', () => {
-    modalQR.src = '/qr.png?' + Date.now();
-});
-
-deleteSessionBtn.addEventListener('click', async () => {
-    const password = prompt("أدخل كلمة المرور لحذف الجلسة:");
-    if (!password) return;
-    const res = await fetch('/delete-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
-    const data = await res.json();
-    alert(data.message || data.error);
-    checkSession();
-});
-
-checkSession();
-setInterval(checkSession, 7000);
+loadSessions();
+setInterval(loadSessions, 8000);
 </script>
 </body>
 </html>
