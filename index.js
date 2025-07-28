@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(express.static('public'));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ تحميل الأوامر من مجلد commands
+// ✅ تحميل الأوامر من مجلد commands (كما في كودك)
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -27,44 +27,48 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-// ✅ إدارة الجلسات المتعددة
-const sessions = new Map();
-const msgStore = new Map();
+// ❗️ بدل متغير sock مفرد، نخزن كل جلسة في Map مع sessionId كمفتاح
+const sessions = new Map();  // key: sessionId (string), value: { sock, state, saveCreds, msgStore }
 
-// ✅ وظيفة إنشاء جلسة جديدة
-const startSock = async (sessionId) => {
-    const sessionPath = path.join(__dirname, 'auth_info', sessionId);
-    if (!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath, { recursive: true });
+async function startSock(sessionId) {
+    // مجلد منفصل لكل جلسة auth_info/sessionId
+    const authDir = path.join('auth_info', sessionId);
+    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
         version,
         auth: state,
         printQRInTerminal: false,
-        generateHighQualityLinkPreview: true
+        generateHighQualityLinkPreview: true,
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // رسالة تخزين الرسائل لمنع الحذف لكل جلسة
+    const msgStore = new Map();
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, qr, lastDisconnect } = update;
 
         if (qr) {
-            const qrFilePath = path.join(__dirname, 'public', `${sessionId}_qr.png`);
-            await qrCode.toFile(qrFilePath, qr).catch(err => console.error('QR Error:', err));
-            console.log(`✅ رمز QR جاهز: ${qrFilePath}`);
+            // حفظ رمز QR باسم مختلف لكل جلسة
+            const qrPath = `./public/qr_${sessionId}.png`;
+            await qrCode.toFile(qrPath, qr).catch(err => console.error('QR Error:', err));
+            console.log(`✅ رمز QR جاهز في ${qrPath} للجلسة: ${sessionId}`);
         }
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log(`📴 الجلسة ${sessionId} تم قطع الاتصال. إعادة الاتصال:`, shouldReconnect);
+            console.log(`📴 تم قطع الاتصال للجلسة ${sessionId}. إعادة الاتصال:`, shouldReconnect);
             if (shouldReconnect) startSock(sessionId);
+            else sessions.delete(sessionId);
         }
 
         if (connection === 'open') {
-            console.log(`✅ تم الاتصال بنجاح مع واتساب [${sessionId}]`);
+            console.log(`✅ تم الاتصال بنجاح مع واتساب للجلسة: ${sessionId}`);
 
             const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
             await sock.sendMessage(selfId, {
@@ -90,7 +94,7 @@ const startSock = async (sessionId) => {
         }
     });
 
-    // ✅ منع حذف الرسائل
+    // منع حذف الرسائل
     sock.ev.on('messages.update', async updates => {
         for (const { key, update } of updates) {
             if (update?.message === null && key?.remoteJid && !key.fromMe) {
@@ -118,7 +122,7 @@ const startSock = async (sessionId) => {
         }
     });
 
-    // ✅ استقبال الأوامر
+    // استقبال الأوامر لكل جلسة
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg?.message) return;
@@ -147,67 +151,91 @@ const startSock = async (sessionId) => {
 
         for (const command of commands) {
             try {
-                await command({ text, reply, sock, msg, from });
+                await command({ text, reply, sock, msg, from, sessionId });
             } catch (err) {
                 console.error('❌ خطأ تنفيذ الأمر:', err);
             }
         }
     });
 
-    sessions.set(sessionId, sock);
+    sessions.set(sessionId, { sock, state, saveCreds, msgStore });
     return sock;
-};
+}
 
-// ✅ API لطلب رمز Pairing Code
+// بدء جميع الجلسات الموجودة (مثلاً عند إعادة تشغيل السيرفر) - يمكنك تعديل حسب الحاجة
+if (fs.existsSync('./auth_info')) {
+    const dirs = fs.readdirSync('./auth_info');
+    for (const dir of dirs) {
+        startSock(dir).catch(console.error);
+    }
+}
+
+// API لطلب رمز Pairing Code وإنشاء جلسة جديدة أو إعادة استخدام الجلسة
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
-        if (!number || !sessionId) return res.status(400).json({ error: '❌ أدخل الرقم ومعرف الجلسة' });
+        if (!number || !sessionId) return res.status(400).json({ error: 'أدخل الرقم ومعرف الجلسة' });
 
-        let sock = sessions.get(sessionId);
-        if (!sock) sock = await startSock(sessionId);
-
-        if (sock.authState.creds.registered) {
-            return res.status(400).json({ error: '⚠️ الجلسة مرتبطة بالفعل' });
+        if (sessions.has(sessionId)) {
+            const session = sessions.get(sessionId);
+            if (session.sock.authState.creds.registered) {
+                return res.status(400).json({ error: 'الجهاز مرتبط بالفعل' });
+            }
+            // إعادة استخدام الجلسة الحالية
+            const code = await session.sock.requestPairingCode(number.trim());
+            return res.json({ pairingCode: code });
         }
 
-        const code = await sock.requestPairingCode(number.trim());
-        if (!code) throw new Error('فشل الحصول على رمز من واتساب');
-        return res.json({ pairingCode: code, qrImage: `/${sessionId}_qr.png` });
+        // إنشاء جلسة جديدة
+        await startSock(sessionId);
+
+        // بعد بدء الجلسة الجديدة، نرسل رمز الاقتران
+        const session = sessions.get(sessionId);
+        if (!session) return res.status(500).json({ error: 'فشل إنشاء الجلسة' });
+
+        const code = await session.sock.requestPairingCode(number.trim());
+        return res.json({ pairingCode: code });
 
     } catch (err) {
         console.error('❌ خطأ في توليد الرمز:', err);
-        res.status(500).json({ error: '⚠️ فشل إنشاء الرمز، السبب: ' + err.message });
+        res.status(500).json({ error: 'فشل إنشاء الرمز' });
     }
 });
 
-// ✅ API لعرض جميع الجلسات النشطة
+// API لفحص الجلسات المفتوحة
 app.get('/sessions', (req, res) => {
-    const activeSessions = [];
-    sessions.forEach((sock, id) => {
-        activeSessions.push({
-            sessionId: id,
-            user: sock.user ? sock.user.id : 'غير متصل'
-        });
-    });
+    const activeSessions = Array.from(sessions.keys());
     res.json(activeSessions);
 });
 
-// ✅ حذف جلسة معينة
-app.post('/delete-session/:id', async (req, res) => {
-    const { id } = req.params;
-    if (!sessions.has(id)) return res.status(404).json({ error: '❌ الجلسة غير موجودة' });
+// حذف جلسة محددة
+app.post('/delete-session', async (req, res) => {
+    try {
+        const { password, sessionId } = req.body;
+        if (password !== '12345') return res.status(403).json({ error: 'كلمة المرور غير صحيحة' });
+        if (!sessionId) return res.status(400).json({ error: 'يجب تحديد معرف الجلسة' });
 
-    const sock = sessions.get(id);
-    await sock.ws.close();
-    sessions.delete(id);
+        if (sessions.has(sessionId)) {
+            const session = sessions.get(sessionId);
+            await session.sock.logout();
+            sessions.delete(sessionId);
 
-    const sessionPath = path.join(__dirname, 'auth_info', id);
-    if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true });
+            // حذف ملفات الجلسة
+            const authDir = path.join('auth_info', sessionId);
+            if (fs.existsSync(authDir)) {
+                fs.rmSync(authDir, { recursive: true, force: true });
+            }
 
-    res.json({ message: `✅ تم حذف الجلسة ${id}` });
+            return res.json({ message: `✅ تم حذف الجلسة ${sessionId} بنجاح` });
+        } else {
+            return res.status(404).json({ error: 'الجلسة غير موجودة' });
+        }
+    } catch (err) {
+        console.error('❌ خطأ حذف الجلسة:', err);
+        res.status(500).json({ error: 'فشل الحذف' });
+    }
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 السيرفر شغال: http://localhost:${PORT}`);
+    console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`);
 });
