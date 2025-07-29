@@ -1,58 +1,44 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>لوحة تحكم الجلسات - طرزان الواقدي</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥 لوحة تحكم الجلسات - طرزان الواقدي</title>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo&display=swap');
-
     body {
         font-family: 'Cairo', sans-serif;
-        background: #101820;
+        background: #0f172a;
         color: #fff;
         margin: 0;
+        padding: 0;
         text-align: center;
         direction: rtl;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
     }
 
     header {
-        background: #1f2937;
-        padding: 15px;
+        background: #1e293b;
+        padding: 20px;
         font-size: 24px;
         color: #00f7ff;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        font-weight: bold;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
     }
 
     main {
         padding: 20px;
-        flex-grow: 1;
-        max-width: 900px;
-        margin: 0 auto;
-        width: 90%;
     }
 
     input {
-        padding: 12px;
-        margin: 10px 8px;
+        padding: 10px;
+        margin: 8px;
         border-radius: 8px;
         border: none;
-        font-size: 17px;
+        font-size: 16px;
         width: 250px;
-        max-width: 100%;
-        box-sizing: border-box;
-        transition: box-shadow 0.3s ease;
-    }
-    input:focus {
-        outline: none;
-        box-shadow: 0 0 8px #00f7ff;
     }
 
     button {
-        padding: 12px 20px;
+        padding: 10px 15px;
         background: #00f7ff;
         color: #101820;
         font-weight: bold;
@@ -60,39 +46,41 @@
         border-radius: 8px;
         cursor: pointer;
         transition: background 0.3s ease;
-        min-width: 130px;
     }
+
     button:hover {
         background: #06c2d4;
     }
 
+    .pair-code {
+        margin-top: 15px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #00ff95;
+    }
+
     table {
         width: 100%;
-        margin-top: 30px;
+        margin-top: 20px;
         border-collapse: collapse;
         background: #1f2937;
         border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 0 12px rgba(0,0,0,0.7);
     }
 
     th, td {
-        padding: 14px 10px;
+        padding: 12px;
         border-bottom: 1px solid #333;
-        word-break: break-word;
     }
 
     th {
         background: #00f7ff;
         color: #101820;
-        font-weight: 600;
-        user-select: none;
     }
 
     td button {
-        padding: 7px 14px;
+        padding: 6px 12px;
         font-size: 14px;
-        user-select: none;
     }
 
     .status-online {
@@ -105,118 +93,60 @@
         font-weight: bold;
     }
 
-    .pair-code {
-        margin-top: 15px;
-        font-size: 20px;
-        font-weight: bold;
-        color: #00f7ff;
-        background: rgba(0, 247, 255, 0.15);
-        padding: 15px 20px;
-        border-radius: 12px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        animation: fadeInScale 0.5s ease forwards;
-        user-select: text;
-        white-space: nowrap;
-    }
-
-    .copy-btn {
-        background: #06c2d4;
-        color: #101820;
-        border: none;
-        border-radius: 8px;
-        padding: 6px 12px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background 0.3s ease;
-        user-select: none;
-    }
-    .copy-btn:hover {
-        background: #00f7ff;
-    }
-
-    @keyframes fadeInScale {
-        from { opacity: 0; transform: scale(0.85);}
-        to { opacity: 1; transform: scale(1);}
-    }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-        input {
-            width: 100%;
-            margin: 10px 0;
-        }
-        button {
-            width: 100%;
-            min-width: unset;
-            margin-top: 8px;
-        }
-        table, th, td {
-            font-size: 14px;
-        }
-        main {
-            padding: 15px 10px;
-        }
+    footer {
+        margin-top: 20px;
+        font-size: 14px;
+        color: #999;
     }
 </style>
 </head>
 <body>
-<header>
-    <h1>🔥 لوحة تحكم الجلسات - طرزان الواقدي</h1>
-</header>
+<header>🔥 لوحة تحكم الجلسات - طرزان الواقدي</header>
 
 <main>
-    <section class="add-session">
-        <h2>➕ إضافة جلسة جديدة</h2>
-        <input type="text" id="sessionId" placeholder="معرف الجلسة" autocomplete="off" />
-        <input type="text" id="phoneNumber" placeholder="رقم واتساب مع الكود الدولي" autocomplete="off" />
-        <button onclick="createSession()">إنشاء الجلسة</button>
-        <div id="pairCode" class="pair-code" style="display:none;"></div>
-    </section>
+    <h2>➕ إنشاء جلسة جديدة</h2>
+    <input type="text" id="sessionId" placeholder="معرف الجلسة (مثال: session1)">
+    <input type="text" id="phoneNumber" placeholder="رقم واتساب مع الكود الدولي">
+    <button onclick="createSession()">إنشاء الجلسة</button>
+    <div id="pairCode" class="pair-code"></div>
 
-    <section class="sessions">
-        <h2>📋 الجلسات الحالية</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>المعرف</th>
-                    <th>الحالة</th>
-                    <th>آخر نشاط</th>
-                    <th>تحكم</th>
-                </tr>
-            </thead>
-            <tbody id="sessionsTable"></tbody>
-        </table>
-    </section>
+    <h2>📋 الجلسات النشطة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>المعرف</th>
+                <th>الحالة</th>
+                <th>آخر نشاط</th>
+                <th>تحكم</th>
+            </tr>
+        </thead>
+        <tbody id="sessionsTable"></tbody>
+    </table>
 </main>
+
+<footer>طرزان الواقدي © 2025</footer>
 
 <script>
 async function fetchSessions() {
-    try {
-        const res = await fetch('/sessions');
-        const sessions = await res.json();
-        const tbody = document.getElementById('sessionsTable');
-        tbody.innerHTML = '';
+    const res = await fetch('/sessions');
+    const sessions = await res.json();
+    const tbody = document.getElementById('sessionsTable');
+    tbody.innerHTML = '';
 
-        sessions.forEach(session => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${session.id}</td>
-                <td class="${session.connected ? 'status-online' : 'status-offline'}">
-                    ${session.connected ? '✅ متصل' : '❌ غير متصل'}
-                </td>
-                <td>${session.lastActive}</td>
-                <td>
-                    <button onclick="deleteSession('${session.id}')">🗑 حذف</button>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    } catch (e) {
-        console.error('خطأ في جلب الجلسات:', e);
-    }
+    sessions.forEach(session => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${session.id}</td>
+            <td class="${session.connected ? 'status-online' : 'status-offline'}">
+                ${session.connected ? '✅ متصل' : '❌ غير متصل'}
+            </td>
+            <td>${session.lastActive}</td>
+            <td>
+                <button onclick="deleteSession('${session.id}')">🗑 حذف</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
 }
 
 async function createSession() {
@@ -229,71 +159,36 @@ async function createSession() {
         return;
     }
 
-    pairCodeDiv.style.display = 'block';
-    pairCodeDiv.textContent = "⏳ جاري إنشاء الرمز...";
+    pairCodeDiv.innerHTML = "⏳ جاري إنشاء رمز الاقتران...";
+    const res = await fetch('/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: phoneNumber, sessionId })
+    });
 
-    try {
-        const res = await fetch('/pair', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ number: phoneNumber, sessionId })
-        });
-        const data = await res.json();
-
-        if (data.pairingCode) {
-            pairCodeDiv.innerHTML = `
-                ✅ رمز الاقتران: <span style="color: yellow;">${data.pairingCode}</span>
-                <button class="copy-btn" onclick="copyPairCode('${data.pairingCode}')">نسخ</button>
-            `;
-            playSound();
-        } else if (data.error) {
-            pairCodeDiv.textContent = `❌ خطأ: ${data.error}`;
-        } else {
-            pairCodeDiv.textContent = '❌ فشل إنشاء الجلسة';
-        }
-    } catch (err) {
-        pairCodeDiv.textContent = '❌ حدث خطأ أثناء الاتصال بالخادم';
-        console.error('خطأ في createSession:', err);
+    const data = await res.json();
+    if (data.pairingCode) {
+        pairCodeDiv.innerHTML = `✅ رمز الاقتران: <span style="color: yellow;">${data.pairingCode}</span>`;
+        playSound();
+    } else {
+        pairCodeDiv.innerHTML = `❌ ${data.error || 'فشل إنشاء الجلسة'}`;
     }
 
     fetchSessions();
 }
 
-function copyPairCode(code) {
-    navigator.clipboard.writeText(code).then(() => {
-        alert('تم نسخ رمز الاقتران!');
-    }).catch(() => {
-        alert('فشل النسخ. يرجى النسخ يدوياً.');
-    });
-}
-
 async function deleteSession(sessionId) {
-    const password = prompt('أدخل كلمة المرور لحذف الجلسة');
-    if (!password) return;
+    const confirmDelete = confirm('هل تريد حذف هذه الجلسة؟');
+    if (!confirmDelete) return;
 
-    if (!confirm(`هل أنت متأكد من حذف الجلسة "${sessionId}"؟`)) return;
-
-    try {
-        const res = await fetch('/delete-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, sessionId })
-        });
-        const data = await res.json();
-        alert(data.message || data.error);
-        fetchSessions();
-    } catch (e) {
-        alert('حدث خطأ أثناء حذف الجلسة');
-        console.error('خطأ في deleteSession:', e);
-    }
+    alert('🛑 حذف الجلسة غير مدعوم بعد في API، أضفه لاحقًا في السيرفر.');
 }
 
 function playSound() {
     const audio = new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_86f3996a9a.mp3');
-    audio.play().catch(() => { /* تجاهل أخطاء تشغيل الصوت */ });
+    audio.play();
 }
 
-// تحديث الجلسات كل 5 ثواني
 setInterval(fetchSessions, 5000);
 fetchSessions();
 </script>
