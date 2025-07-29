@@ -1,17 +1,18 @@
 {
   "name": "whatsapp-bot-dini",
-  "version": "2.1.0",
-  "description": "WhatsApp Bot Dini with Multi-Session, HTML QR Viewer and Pairing Code Generator",
+  "version": "2.0.0",
+  "description": "WhatsApp Bot Dini with Multi-Session and HTML QR Viewer",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "author": "طرزان الواقدي",
+  "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.0",
     "express": "^4.18.2",
     "mime-types": "^2.1.35",
     "qrcode": "^1.5.1",
-    "qrcode-terminal": "^0.12.0",
     "pino": "^8.14.2",
     "yt-search": "^2.10.7",
     "ytdl-core": "^4.11.1",
@@ -25,11 +26,6 @@
     "google-play-scraper": "^9.0.3",
     "@google/generative-ai": "^0.7.0",
     "form-data": "^4.0.0",
-    "cheerio": "^1.0.0-rc.12",
-    "fs-extra": "^11.1.1",
-    "@adiwajshing/keyed-db": "^0.2.4",
-    "@colors/colors": "1.5.0",
-    "chalk": "~4.1.0",
-    "path": "^0.12.7"
+    "cheerio": "^1.0.0-rc.12"
   }
 }
