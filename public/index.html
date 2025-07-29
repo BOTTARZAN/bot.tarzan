@@ -3,194 +3,94 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🔥 لوحة تحكم الجلسات - طرزان الواقدي</title>
+<title>🔥 نظام الاقتران - طرزان الواقدي 🔥</title>
 <style>
     body {
-        font-family: 'Cairo', sans-serif;
-        background: #0f172a;
+        font-family: Arial, sans-serif;
+        background: #0d1117;
         color: #fff;
-        margin: 0;
-        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        flex-direction: column;
         text-align: center;
-        direction: rtl;
+        margin: 0;
     }
-
-    header {
-        background: #1e293b;
+    .box {
+        background: #161b22;
         padding: 20px;
-        font-size: 24px;
-        color: #00f7ff;
-        font-weight: bold;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 0 15px rgba(0,255,153,0.5);
     }
-
-    main {
-        padding: 20px;
+    h2 {
+        color: #00ff99;
+        margin-bottom: 15px;
     }
-
-    input {
-        padding: 10px;
-        margin: 8px;
-        border-radius: 8px;
+    input, button {
+        width: 90%;
+        padding: 12px;
+        margin: 10px 0;
+        border-radius: 5px;
         border: none;
         font-size: 16px;
-        width: 250px;
     }
-
+    input {
+        background: #222;
+        color: #fff;
+    }
     button {
-        padding: 10px 15px;
-        background: #00f7ff;
-        color: #101820;
-        font-weight: bold;
-        border: none;
-        border-radius: 8px;
+        background: #00b894;
+        color: #fff;
         cursor: pointer;
-        transition: background 0.3s ease;
+        font-weight: bold;
     }
-
-    button:hover {
-        background: #06c2d4;
-    }
-
-    .pair-code {
+    .code {
+        background: #222;
+        padding: 15px;
+        font-size: 20px;
+        font-weight: bold;
         margin-top: 15px;
-        font-size: 18px;
-        font-weight: bold;
-        color: #00ff95;
-    }
-
-    table {
-        width: 100%;
-        margin-top: 20px;
-        border-collapse: collapse;
-        background: #1f2937;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    th, td {
-        padding: 12px;
-        border-bottom: 1px solid #333;
-    }
-
-    th {
-        background: #00f7ff;
-        color: #101820;
-    }
-
-    td button {
-        padding: 6px 12px;
-        font-size: 14px;
-    }
-
-    .status-online {
-        color: #00ff00;
-        font-weight: bold;
-    }
-
-    .status-offline {
-        color: #ff3c3c;
-        font-weight: bold;
-    }
-
-    footer {
-        margin-top: 20px;
-        font-size: 14px;
-        color: #999;
+        border-radius: 5px;
+        color: #00ff99;
     }
 </style>
 </head>
 <body>
-<header>🔥 لوحة تحكم الجلسات - طرزان الواقدي</header>
-
-<main>
-    <h2>➕ إنشاء جلسة جديدة</h2>
-    <input type="text" id="sessionId" placeholder="معرف الجلسة (مثال: session1)">
-    <input type="text" id="phoneNumber" placeholder="رقم واتساب مع الكود الدولي">
-    <button onclick="createSession()">إنشاء الجلسة</button>
-    <div id="pairCode" class="pair-code"></div>
-
-    <h2>📋 الجلسات النشطة</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>المعرف</th>
-                <th>الحالة</th>
-                <th>آخر نشاط</th>
-                <th>تحكم</th>
-            </tr>
-        </thead>
-        <tbody id="sessionsTable"></tbody>
-    </table>
-</main>
-
-<footer>طرزان الواقدي © 2025</footer>
+    <div class="box">
+        <h2>🔥 نظام الاقتران - طرزان الواقدي 🔥</h2>
+        <input type="text" id="sessionId" placeholder="أدخل اسم الجلسة" />
+        <input type="text" id="phoneNumber" placeholder="أدخل رقم الهاتف (+966...)" />
+        <input type="password" id="password" placeholder="أدخل كلمة السر" />
+        <button onclick="createSession()">إنشاء جلسة</button>
+        <div id="result" class="code"></div>
+    </div>
 
 <script>
-async function fetchSessions() {
-    const res = await fetch('/sessions');
-    const sessions = await res.json();
-    const tbody = document.getElementById('sessionsTable');
-    tbody.innerHTML = '';
-
-    sessions.forEach(session => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${session.id}</td>
-            <td class="${session.connected ? 'status-online' : 'status-offline'}">
-                ${session.connected ? '✅ متصل' : '❌ غير متصل'}
-            </td>
-            <td>${session.lastActive}</td>
-            <td>
-                <button onclick="deleteSession('${session.id}')">🗑 حذف</button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
 async function createSession() {
-    const sessionId = document.getElementById('sessionId').value.trim();
-    const phoneNumber = document.getElementById('phoneNumber').value.trim();
-    const pairCodeDiv = document.getElementById('pairCode');
+    const sessionId = document.getElementById('sessionId').value;
+    const phoneNumber = document.getElementById('phoneNumber').value;
+    const password = document.getElementById('password').value;
 
-    if (!sessionId || !phoneNumber) {
-        alert('❌ أدخل معرف الجلسة ورقم الهاتف');
-        return;
-    }
-
-    pairCodeDiv.innerHTML = "⏳ جاري إنشاء رمز الاقتران...";
-    const res = await fetch('/pair', {
+    const res = await fetch('/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: phoneNumber, sessionId })
+        body: JSON.stringify({ sessionId, phoneNumber, password })
     });
 
     const data = await res.json();
+    const resultDiv = document.getElementById('result');
+
     if (data.pairingCode) {
-        pairCodeDiv.innerHTML = `✅ رمز الاقتران: <span style="color: yellow;">${data.pairingCode}</span>`;
-        playSound();
+        resultDiv.innerHTML = `✅ رمز الاقتران:<br><span style="color:#00ff99">${data.pairingCode}</span>`;
+    } else if (data.error) {
+        resultDiv.innerHTML = `❌ ${data.error}`;
     } else {
-        pairCodeDiv.innerHTML = `❌ ${data.error || 'فشل إنشاء الجلسة'}`;
+        resultDiv.innerHTML = `ℹ️ ${data.message}`;
     }
-
-    fetchSessions();
 }
-
-async function deleteSession(sessionId) {
-    const confirmDelete = confirm('هل تريد حذف هذه الجلسة؟');
-    if (!confirmDelete) return;
-
-    alert('🛑 حذف الجلسة غير مدعوم بعد في API، أضفه لاحقًا في السيرفر.');
-}
-
-function playSound() {
-    const audio = new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_86f3996a9a.mp3');
-    audio.play();
-}
-
-setInterval(fetchSessions, 5000);
-fetchSessions();
 </script>
 </body>
 </html>
