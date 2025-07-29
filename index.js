@@ -26,7 +26,8 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-const sessions = new Map(); // لتخزين الجلسات
+// تخزين الجلسات
+const sessions = new Map();
 
 async function startSock(sessionId) {
     const authDir = path.join('auth_info', sessionId);
@@ -39,25 +40,25 @@ async function startSock(sessionId) {
         version,
         auth: state,
         printQRInTerminal: false,
-        generateHighQualityLinkPreview: true,
+        generateHighQualityLinkPreview: true
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    const msgStore = new Map(); // لتخزين الرسائل ومنع حذفها
+    const msgStore = new Map();
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, qr, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log(`📴 تم قطع الاتصال للجلسة ${sessionId}. إعادة الاتصال:`, shouldReconnect);
+            console.log(`📴 الجلسة ${sessionId} انقطعت. إعادة الاتصال:`, shouldReconnect);
             if (shouldReconnect) startSock(sessionId);
             else sessions.delete(sessionId);
         }
 
         if (connection === 'open') {
-            console.log(`✅ تم الاتصال مع واتساب - الجلسة: ${sessionId}`);
+            console.log(`✅ الجلسة ${sessionId} متصلة`);
 
             const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
             await sock.sendMessage(selfId, {
@@ -69,7 +70,7 @@ async function startSock(sessionId) {
 
 🧠 *أوامر مقترحة:*  
 ━━━━━━━━━━━━━━━  
-• *tarzan* ⬅️ لعرض جميع الأوامر الجاهزة  
+• *tarzan* ⬅️ لعرض جميع الأوامر  
 ━━━━━━━━━━━━━━━  
 
 ⚡ *استمتع بالتجربة الآن!*`,
@@ -138,22 +139,20 @@ async function startSock(sessionId) {
             }
         };
 
-        sessions.get(sessionId).lastActive = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
-
         for (const command of commands) {
             try {
                 await command({ text, reply, sock, msg, from, sessionId });
             } catch (err) {
-                console.error('❌ خطأ بالأمر:', err);
+                console.error('❌ خطأ تنفيذ الأمر:', err);
             }
         }
     });
 
-    sessions.set(sessionId, { sock, state, saveCreds, lastActive: null, msgStore });
+    sessions.set(sessionId, { sock, state, saveCreds, msgStore });
     return sock;
 }
 
-// إعادة تشغيل جميع الجلسات المحفوظة عند تشغيل السيرفر
+// إعادة تشغيل الجلسات السابقة عند تشغيل السيرفر
 if (fs.existsSync('./auth_info')) {
     const dirs = fs.readdirSync('./auth_info');
     for (const dir of dirs) {
@@ -161,7 +160,7 @@ if (fs.existsSync('./auth_info')) {
     }
 }
 
-// API لإنشاء Pairing Code وطلب رمز الاقتران
+// ✅ API طلب رمز الاقتران
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
@@ -170,39 +169,36 @@ app.post('/pair', async (req, res) => {
         if (sessions.has(sessionId)) {
             const session = sessions.get(sessionId);
             if (session.sock.authState.creds.registered) {
-                return res.status(400).json({ error: 'الجلسة متصلة بالفعل' });
+                return res.status(400).json({ error: 'الجهاز مرتبط بالفعل' });
             }
-            // طلب رمز الاقتران باستخدام الطريقة الجديدة (server)
-            const code = await session.sock.requestPairingCode(number.trim(), 'server');
+            const code = await session.sock.requestPairingCode(number.trim(), 'server'); // ✅ إضافة المعامل server
             return res.json({ pairingCode: code });
         }
 
-        // إنشاء جلسة جديدة
         await startSock(sessionId);
         const session = sessions.get(sessionId);
         if (!session) return res.status(500).json({ error: 'فشل إنشاء الجلسة' });
 
-        // طلب رمز الاقتران (pairing code)
-        const code = await session.sock.requestPairingCode(number.trim(), 'server');
+        const code = await session.sock.requestPairingCode(number.trim(), 'server'); // ✅ نفس الشيء هنا
         return res.json({ pairingCode: code });
 
     } catch (err) {
-        console.error('❌ خطأ في إنشاء الرمز:', err);
+        console.error('❌ خطأ في توليد الرمز:', err);
         res.status(500).json({ error: 'فشل إنشاء الرمز' });
     }
 });
 
-// API لعرض الجلسات الحالية
+// API لفحص الجلسات
 app.get('/sessions', (req, res) => {
-    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
+    const activeSessions = Array.from(sessions.keys()).map(id => ({
         id,
-        connected: !!session.sock?.user,
-        lastActive: session.lastActive || '—'
+        connected: sessions.get(id)?.sock?.user ? true : false,
+        lastActive: moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss")
     }));
     res.json(activeSessions);
 });
 
-// API لحذف جلسة مع التحقق من كلمة المرور
+// حذف جلسة
 app.post('/delete-session', async (req, res) => {
     try {
         const { password, sessionId } = req.body;
@@ -230,5 +226,5 @@ app.post('/delete-session', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 السيرفر يعمل على http://localhost:${PORT}`);
+    console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`);
 });
