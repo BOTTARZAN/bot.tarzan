@@ -5,7 +5,6 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = b
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const qrCode = require('qrcode');
 const moment = require('moment-timezone');
 
 const app = express();
@@ -15,7 +14,7 @@ app.use(express.json());
 app.use(express.static('public'));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ تحميل الأوامر من مجلد commands (كما في كودك)
+// تحميل الأوامر من مجلد commands
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -27,11 +26,9 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-// ❗️ بدل متغير sock مفرد، نخزن كل جلسة في Map مع sessionId كمفتاح
-const sessions = new Map();  // key: sessionId (string), value: { sock, state, saveCreds, msgStore }
+const sessions = new Map(); // تخزين الجلسات
 
 async function startSock(sessionId) {
-    // مجلد منفصل لكل جلسة auth_info/sessionId
     const authDir = path.join('auth_info', sessionId);
     if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
@@ -47,18 +44,10 @@ async function startSock(sessionId) {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // رسالة تخزين الرسائل لمنع الحذف لكل جلسة
-    const msgStore = new Map();
+    const msgStore = new Map(); // تخزين الرسائل لمنع الحذف
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, qr, lastDisconnect } = update;
-
-        if (qr) {
-            // حفظ رمز QR باسم مختلف لكل جلسة
-            const qrPath = `./public/qr_${sessionId}.png`;
-            await qrCode.toFile(qrPath, qr).catch(err => console.error('QR Error:', err));
-            console.log(`✅ رمز QR جاهز في ${qrPath} للجلسة: ${sessionId}`);
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
@@ -68,7 +57,7 @@ async function startSock(sessionId) {
         }
 
         if (connection === 'open') {
-            console.log(`✅ تم الاتصال بنجاح مع واتساب للجلسة: ${sessionId}`);
+            console.log(`✅ تم الاتصال مع واتساب - الجلسة: ${sessionId}`);
 
             const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
             await sock.sendMessage(selfId, {
@@ -122,7 +111,7 @@ async function startSock(sessionId) {
         }
     });
 
-    // استقبال الأوامر لكل جلسة
+    // استقبال الأوامر
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg?.message) return;
@@ -135,34 +124,26 @@ async function startSock(sessionId) {
             msg.message.extendedTextMessage?.text ||
             msg.message.buttonsResponseMessage?.selectedButtonId;
 
-        if (!text) return;
-
-        const reply = async (message, buttons = null) => {
-            if (buttons && Array.isArray(buttons)) {
-                await sock.sendMessage(from, {
-                    text: message,
-                    buttons: buttons.map(b => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
-                    headerType: 1
-                }, { quoted: msg });
-            } else {
-                await sock.sendMessage(from, { text: message }, { quoted: msg });
-            }
+        const reply = async (message) => {
+            await sock.sendMessage(from, { text: message }, { quoted: msg });
         };
+
+        sessions.get(sessionId).lastActive = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
 
         for (const command of commands) {
             try {
                 await command({ text, reply, sock, msg, from, sessionId });
             } catch (err) {
-                console.error('❌ خطأ تنفيذ الأمر:', err);
+                console.error('❌ خطأ بالأمر:', err);
             }
         }
     });
 
-    sessions.set(sessionId, { sock, state, saveCreds, msgStore });
+    sessions.set(sessionId, { sock, state, saveCreds, lastActive: null, msgStore });
     return sock;
 }
 
-// بدء جميع الجلسات الموجودة (مثلاً عند إعادة تشغيل السيرفر) - يمكنك تعديل حسب الحاجة
+// عند إعادة التشغيل
 if (fs.existsSync('./auth_info')) {
     const dirs = fs.readdirSync('./auth_info');
     for (const dir of dirs) {
@@ -170,7 +151,7 @@ if (fs.existsSync('./auth_info')) {
     }
 }
 
-// API لطلب رمز Pairing Code وإنشاء جلسة جديدة أو إعادة استخدام الجلسة
+// API لإنشاء Pairing Code
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
@@ -179,17 +160,13 @@ app.post('/pair', async (req, res) => {
         if (sessions.has(sessionId)) {
             const session = sessions.get(sessionId);
             if (session.sock.authState.creds.registered) {
-                return res.status(400).json({ error: 'الجهاز مرتبط بالفعل' });
+                return res.status(400).json({ error: 'الجلسة متصلة بالفعل' });
             }
-            // إعادة استخدام الجلسة الحالية
             const code = await session.sock.requestPairingCode(number.trim());
             return res.json({ pairingCode: code });
         }
 
-        // إنشاء جلسة جديدة
         await startSock(sessionId);
-
-        // بعد بدء الجلسة الجديدة، نرسل رمز الاقتران
         const session = sessions.get(sessionId);
         if (!session) return res.status(500).json({ error: 'فشل إنشاء الجلسة' });
 
@@ -197,18 +174,22 @@ app.post('/pair', async (req, res) => {
         return res.json({ pairingCode: code });
 
     } catch (err) {
-        console.error('❌ خطأ في توليد الرمز:', err);
+        console.error('❌ خطأ إنشاء الرمز:', err);
         res.status(500).json({ error: 'فشل إنشاء الرمز' });
     }
 });
 
-// API لفحص الجلسات المفتوحة
+// عرض الجلسات
 app.get('/sessions', (req, res) => {
-    const activeSessions = Array.from(sessions.keys());
+    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
+        id,
+        connected: !!session.sock?.user,
+        lastActive: session.lastActive || '—'
+    }));
     res.json(activeSessions);
 });
 
-// حذف جلسة محددة
+// حذف جلسة
 app.post('/delete-session', async (req, res) => {
     try {
         const { password, sessionId } = req.body;
@@ -220,7 +201,6 @@ app.post('/delete-session', async (req, res) => {
             await session.sock.logout();
             sessions.delete(sessionId);
 
-            // حذف ملفات الجلسة
             const authDir = path.join('auth_info', sessionId);
             if (fs.existsSync(authDir)) {
                 fs.rmSync(authDir, { recursive: true, force: true });
@@ -237,5 +217,5 @@ app.post('/delete-session', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`);
+    console.log(`🚀 السيرفر يعمل على http://localhost:${PORT}`);
 });
