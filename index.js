@@ -1,11 +1,8 @@
-const baileys = require('@whiskeysockets/baileys');
-const makeWASocket = baileys.default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys;
-
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -14,7 +11,7 @@ app.use(express.json());
 app.use(express.static('public'));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// تحميل الأوامر من مجلد commands
+// ✅ تحميل الأوامر
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -26,33 +23,34 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-// تخزين الجلسات
-const sessions = new Map();
+// ✅ إدارة الجلسات
+const sessions = new Map(); // sessionId => { sock, state, saveCreds, msgStore }
 
 async function startSock(sessionId) {
-    const authDir = path.join('auth_info', sessionId);
-    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+    const sessionDir = path.join('auth_info', sessionId);
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
 
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
         version,
         auth: state,
         printQRInTerminal: false,
-        generateHighQualityLinkPreview: true
+        browser: ['TarzanBot', 'Chrome', '1.0.0']
     });
 
     sock.ev.on('creds.update', saveCreds);
 
+    // تخزين الرسائل لمنع الحذف
     const msgStore = new Map();
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, qr, lastDisconnect } = update;
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log(`📴 الجلسة ${sessionId} انقطعت. إعادة الاتصال:`, shouldReconnect);
+            console.log(`📴 الجلسة ${sessionId} انقطعت. إعادة الاتصال: ${shouldReconnect}`);
             if (shouldReconnect) startSock(sessionId);
             else sessions.delete(sessionId);
         }
@@ -64,16 +62,16 @@ async function startSock(sessionId) {
             await sock.sendMessage(selfId, {
                 image: { url: 'https://b.top4top.io/p_3489wk62d0.jpg' },
                 caption: `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
-
 ✅ *تم ربط الجلسة بنجاح!*  
-🔑 *معرف الجلسة:* \`${sessionId}\`
+🔑 *معرف الجلسة:* ${sessionId}
 
 🧠 *أوامر مقترحة:*  
-━━━━━━━━━━━━━━━  
-• *tarzan* ⬅️ لعرض جميع الأوامر  
-━━━━━━━━━━━━━━━  
+• video - لتحميل الفيديوهات  
+• mp3 - لتحويل الصوتيات  
+• insta - تحميل من إنستجرام  
+• help - لعرض جميع الأوامر  
 
-⚡ *استمتع بالتجربة الآن!*`,
+⚡ *استمتع بالتجربة!*`,
                 footer: "🤖 طرزان الواقدي ⚔️",
                 buttons: [
                     { buttonId: "help", buttonText: { displayText: "📋 عرض الأوامر" }, type: 1 },
@@ -81,10 +79,11 @@ async function startSock(sessionId) {
                 ],
                 headerType: 4
             });
+            console.log(`📩 تم إرسال رسالة ترحيب للرقم المرتبط`);
         }
     });
 
-    // منع حذف الرسائل
+    // ✅ منع الحذف
     sock.ev.on('messages.update', async updates => {
         for (const { key, update } of updates) {
             if (update?.message === null && key?.remoteJid && !key.fromMe) {
@@ -94,25 +93,28 @@ async function startSock(sessionId) {
 
                     const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
                     const senderJid = key.participant || stored.key?.participant || key.remoteJid;
-                    const number = senderJid?.split('@')[0];
+                    const number = senderJid?.split('@')[0] || 'مجهول';
                     const name = stored.pushName || 'غير معروف';
                     const type = Object.keys(stored.message)[0];
                     const time = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
 
                     const infoMessage =
-                        `🚫 *تم حذف رسالة!*\n👤 ${name}\n📱 wa.me/${number}\n🕒 ${time}\n📂 ${type}`;
+                        `🚫 *تم حذف رسالة!*\n👤 *الاسم:* ${name}\n📱 *الرقم:* wa.me/${number}\n🕒 *الوقت:* ${time}\n📂 *نوع الرسالة:* ${type}`;
+
+                    fs.appendFileSync('./deleted_messages.log',
+                        `🧾 حذف من: ${name} - wa.me/${number} - ${type} - ${time}\n==========================\n`
+                    );
 
                     await sock.sendMessage(selfId, { text: infoMessage });
                     await sock.sendMessage(selfId, { forward: stored });
-
                 } catch (err) {
-                    console.error('❌ خطأ منع الحذف:', err.message);
+                    console.error('❌ خطأ في منع الحذف:', err.message);
                 }
             }
         }
     });
 
-    // استقبال الأوامر
+    // ✅ استقبال الأوامر
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg?.message) return;
@@ -143,7 +145,7 @@ async function startSock(sessionId) {
             try {
                 await command({ text, reply, sock, msg, from, sessionId });
             } catch (err) {
-                console.error('❌ خطأ تنفيذ الأمر:', err);
+                console.error('❌ خطأ أثناء تنفيذ الأمر:', err);
             }
         }
     });
@@ -152,15 +154,7 @@ async function startSock(sessionId) {
     return sock;
 }
 
-// إعادة تشغيل الجلسات السابقة عند تشغيل السيرفر
-if (fs.existsSync('./auth_info')) {
-    const dirs = fs.readdirSync('./auth_info');
-    for (const dir of dirs) {
-        startSock(dir).catch(console.error);
-    }
-}
-
-// ✅ API طلب رمز الاقتران
+// ✅ API لطلب رمز Pairing Code
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
@@ -169,9 +163,9 @@ app.post('/pair', async (req, res) => {
         if (sessions.has(sessionId)) {
             const session = sessions.get(sessionId);
             if (session.sock.authState.creds.registered) {
-                return res.status(400).json({ error: 'الجهاز مرتبط بالفعل' });
+                return res.status(400).json({ error: 'الجلسة مرتبطة بالفعل' });
             }
-            const code = await session.sock.requestPairingCode(number.trim(), 'server'); // ✅ إضافة المعامل server
+            const code = await session.sock.requestPairingCode(number.trim());
             return res.json({ pairingCode: code });
         }
 
@@ -179,52 +173,23 @@ app.post('/pair', async (req, res) => {
         const session = sessions.get(sessionId);
         if (!session) return res.status(500).json({ error: 'فشل إنشاء الجلسة' });
 
-        const code = await session.sock.requestPairingCode(number.trim(), 'server'); // ✅ نفس الشيء هنا
+        const code = await session.sock.requestPairingCode(number.trim());
         return res.json({ pairingCode: code });
 
     } catch (err) {
         console.error('❌ خطأ في توليد الرمز:', err);
-        res.status(500).json({ error: 'فشل إنشاء الرمز' });
+        res.status(500).json({ error: 'فشل في إنشاء الرمز' });
     }
 });
 
-// API لفحص الجلسات
+// ✅ API لعرض الجلسات
 app.get('/sessions', (req, res) => {
     const activeSessions = Array.from(sessions.keys()).map(id => ({
         id,
-        connected: sessions.get(id)?.sock?.user ? true : false,
+        connected: sessions.get(id).sock?.user ? true : false,
         lastActive: moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss")
     }));
     res.json(activeSessions);
 });
 
-// حذف جلسة
-app.post('/delete-session', async (req, res) => {
-    try {
-        const { password, sessionId } = req.body;
-        if (password !== '12345') return res.status(403).json({ error: 'كلمة المرور غير صحيحة' });
-        if (!sessionId) return res.status(400).json({ error: 'يجب تحديد معرف الجلسة' });
-
-        if (sessions.has(sessionId)) {
-            const session = sessions.get(sessionId);
-            await session.sock.logout();
-            sessions.delete(sessionId);
-
-            const authDir = path.join('auth_info', sessionId);
-            if (fs.existsSync(authDir)) {
-                fs.rmSync(authDir, { recursive: true, force: true });
-            }
-
-            return res.json({ message: `✅ تم حذف الجلسة ${sessionId} بنجاح` });
-        } else {
-            return res.status(404).json({ error: 'الجلسة غير موجودة' });
-        }
-    } catch (err) {
-        console.error('❌ خطأ حذف الجلسة:', err);
-        res.status(500).json({ error: 'فشل الحذف' });
-    }
-});
-
-app.listen(PORT, () => {
-    console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 السيرفر شغال على http://localhost:${PORT}`));
