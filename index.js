@@ -9,22 +9,20 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion,
-  makeInMemoryStore
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const PASSWORD = 'JUSTIN12';
+const PASSWORD = 'JUSTIN12'; // غيّرها لكلمة مرورك
 const sessions = {};
 const msgStore = new Map();
-const store = makeInMemoryStore({ logger: undefined });
 
 app.use(express.static('public'));
 app.use(express.json());
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ✅ تحميل الأوامر
+// ✅ تحميل الأوامر من مجلد commands
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -36,7 +34,7 @@ if (fs.existsSync(commandsPath)) {
   });
 }
 
-// ✅ بدء جلسة جديدة
+// ✅ بدء جلسة جديدة مع Pairing Code
 async function startSession(sessionId, res, phoneNumber) {
   try {
     const sessionPath = path.join(__dirname, 'sessions', sessionId);
@@ -61,7 +59,7 @@ async function startSession(sessionId, res, phoneNumber) {
       return res.json({ pairingCode });
     }
 
-    // ✅ متابعة حالة الاتصال
+    // ✅ متابعة الاتصال
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect } = update;
 
@@ -167,7 +165,7 @@ async function startSession(sessionId, res, phoneNumber) {
   }
 }
 
-// ✅ API: إنشاء جلسة مع رمز الاقتران
+// ✅ API: إنشاء جلسة جديدة
 app.post('/create-session', (req, res) => {
   const { sessionId, phoneNumber, password } = req.body;
 
@@ -180,10 +178,12 @@ app.post('/create-session', (req, res) => {
   startSession(sessionId, res, phoneNumber);
 });
 
+// ✅ عرض الجلسات
 app.get('/sessions', (req, res) => {
   res.json(Object.keys(sessions));
 });
 
+// ✅ حذف جلسة
 app.post('/delete-session', (req, res) => {
   const { sessionId, password } = req.body;
   if (password !== PASSWORD) return res.json({ error: 'كلمة السر غير صحيحة' });
