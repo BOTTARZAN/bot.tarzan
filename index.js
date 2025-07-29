@@ -1,15 +1,16 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const moment = require('moment-timezone');
+const qrCode = require('qrcode');
+const chalk = require('chalk');
+
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
-
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const qrCode = require('qrcode');
-const moment = require('moment-timezone');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -21,46 +22,50 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 // ✅ تحميل الأوامر من مجلد commands
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
-fs.readdirSync(commandsPath).forEach(file => {
-  if (file.endsWith('.js')) {
-    const command = require(`./commands/${file}`);
-    if (typeof command === 'function') commands.push(command);
-  }
-});
+if (fs.existsSync(commandsPath)) {
+  fs.readdirSync(commandsPath).forEach(file => {
+    if (file.endsWith('.js')) {
+      const command = require(`./commands/${file}`);
+      if (typeof command === 'function') commands.push(command);
+    }
+  });
+}
 
 // ✅ تخزين الرسائل لمنع الحذف
 const msgStore = new Map();
-let sock; // لتخزين الجلسة النشطة
+const sessions = {}; // تخزين الجلسات المتعددة
 
-const startSock = async () => {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+// ✅ بدء جلسة جديدة
+async function startSession(sessionId) {
+  const sessionPath = path.join(__dirname, 'sessions', sessionId);
+  fs.mkdirSync(sessionPath, { recursive: true });
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     version,
     auth: state,
     printQRInTerminal: false,
     generateHighQualityLinkPreview: true
   });
 
+  sessions[sessionId] = sock;
   sock.ev.on('creds.update', saveCreds);
 
+  // ✅ حالة الاتصال
   sock.ev.on('connection.update', async (update) => {
-    const { connection, qr, lastDisconnect } = update;
-
-    if (qr) {
-      await qrCode.toFile('./public/qr.png', qr).catch(err => console.error('QR Error:', err));
-      console.log('✅ تم حفظ رمز QR في ./public/qr.png');
-    }
+    const { connection, lastDisconnect } = update;
 
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-      console.log('📴 تم قطع الاتصال. إعادة الاتصال:', shouldReconnect);
-      if (shouldReconnect) startSock();
+      console.log(`📴 الجلسة ${sessionId} انقطعت`);
+      if (shouldReconnect) startSession(sessionId);
+      else delete sessions[sessionId];
     }
 
     if (connection === 'open') {
-      console.log('✅ تم الاتصال بواتساب بنجاح');
+      console.log(`✅ الجلسة ${sessionId} متصلة`);
 
       const selfId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
       await sock.sendMessage(selfId, {
@@ -68,7 +73,6 @@ const startSock = async () => {
         caption: `✨ *مرحباً بك في بوت طرزان الواقدي* ✨
 
 ✅ تم ربط الرقم بنجاح.
-
 🧠 *أوامر مقترحة:*
 • *video* لتحميل الفيديوهات
 • *mp3* لتحويل الصوتيات
@@ -84,7 +88,7 @@ const startSock = async () => {
         headerType: 4
       });
 
-      console.log("📩 تم إرسال رسالة ترحيب فخمة للرقم المرتبط.");
+      console.log(`📩 تم إرسال رسالة ترحيب للجلسة ${sessionId}`);
     }
   });
 
@@ -124,7 +128,7 @@ const startSock = async () => {
     }
   });
 
-  // 📥 استقبال الأوامر
+  // ✅ استقبال الأوامر
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.message) return;
@@ -159,18 +163,21 @@ const startSock = async () => {
       }
     }
   });
-};
+}
 
-startSock();
-
-// ✅ API لطلب رمز Pairing Code
+// ✅ API لطلب رمز Pairing Code للجلسة
 app.post('/pair', async (req, res) => {
   try {
-    const { number } = req.body;
-    if (!number) return res.status(400).json({ error: 'يرجى إدخال الرقم' });
-    if (!sock || sock.authState.creds.registered) {
-      return res.status(400).json({ error: 'الجهاز مرتبط بالفعل' });
+    const { sessionId, number } = req.body;
+    if (!sessionId || !number) return res.status(400).json({ error: 'أدخل sessionId ورقم الهاتف' });
+
+    if (!sessions[sessionId]) await startSession(sessionId);
+
+    const sock = sessions[sessionId];
+    if (sock.authState.creds.registered) {
+      return res.status(400).json({ error: 'الجلسة مربوطة بالفعل' });
     }
+
     const code = await sock.requestPairingCode(number.trim());
     return res.json({ pairingCode: code });
   } catch (err) {
