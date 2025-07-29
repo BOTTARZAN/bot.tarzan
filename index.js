@@ -26,7 +26,7 @@ if (fs.existsSync(commandsPath)) {
     });
 }
 
-const sessions = new Map(); // تخزين الجلسات
+const sessions = new Map(); // لتخزين الجلسات
 
 async function startSock(sessionId) {
     const authDir = path.join('auth_info', sessionId);
@@ -44,7 +44,7 @@ async function startSock(sessionId) {
 
     sock.ev.on('creds.update', saveCreds);
 
-    const msgStore = new Map(); // تخزين الرسائل لمنع الحذف
+    const msgStore = new Map(); // لتخزين الرسائل ومنع حذفها
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
@@ -124,8 +124,18 @@ async function startSock(sessionId) {
             msg.message.extendedTextMessage?.text ||
             msg.message.buttonsResponseMessage?.selectedButtonId;
 
-        const reply = async (message) => {
-            await sock.sendMessage(from, { text: message }, { quoted: msg });
+        if (!text) return;
+
+        const reply = async (message, buttons = null) => {
+            if (buttons && Array.isArray(buttons)) {
+                await sock.sendMessage(from, {
+                    text: message,
+                    buttons: buttons.map(b => ({ buttonId: b.id, buttonText: { displayText: b.text }, type: 1 })),
+                    headerType: 1
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(from, { text: message }, { quoted: msg });
+            }
         };
 
         sessions.get(sessionId).lastActive = moment().tz("Asia/Riyadh").format("YYYY-MM-DD HH:mm:ss");
@@ -143,7 +153,7 @@ async function startSock(sessionId) {
     return sock;
 }
 
-// عند إعادة التشغيل
+// إعادة تشغيل جميع الجلسات المحفوظة عند تشغيل السيرفر
 if (fs.existsSync('./auth_info')) {
     const dirs = fs.readdirSync('./auth_info');
     for (const dir of dirs) {
@@ -151,7 +161,7 @@ if (fs.existsSync('./auth_info')) {
     }
 }
 
-// API لإنشاء Pairing Code
+// API لإنشاء Pairing Code وطلب رمز الاقتران
 app.post('/pair', async (req, res) => {
     try {
         const { number, sessionId } = req.body;
@@ -162,24 +172,27 @@ app.post('/pair', async (req, res) => {
             if (session.sock.authState.creds.registered) {
                 return res.status(400).json({ error: 'الجلسة متصلة بالفعل' });
             }
-            const code = await session.sock.requestPairingCode(number.trim());
+            // طلب رمز الاقتران باستخدام الطريقة الجديدة (server)
+            const code = await session.sock.requestPairingCode(number.trim(), 'server');
             return res.json({ pairingCode: code });
         }
 
+        // إنشاء جلسة جديدة
         await startSock(sessionId);
         const session = sessions.get(sessionId);
         if (!session) return res.status(500).json({ error: 'فشل إنشاء الجلسة' });
 
-        const code = await session.sock.requestPairingCode(number.trim());
+        // طلب رمز الاقتران (pairing code)
+        const code = await session.sock.requestPairingCode(number.trim(), 'server');
         return res.json({ pairingCode: code });
 
     } catch (err) {
-        console.error('❌ خطأ إنشاء الرمز:', err);
+        console.error('❌ خطأ في إنشاء الرمز:', err);
         res.status(500).json({ error: 'فشل إنشاء الرمز' });
     }
 });
 
-// عرض الجلسات
+// API لعرض الجلسات الحالية
 app.get('/sessions', (req, res) => {
     const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
         id,
@@ -189,7 +202,7 @@ app.get('/sessions', (req, res) => {
     res.json(activeSessions);
 });
 
-// حذف جلسة
+// API لحذف جلسة مع التحقق من كلمة المرور
 app.post('/delete-session', async (req, res) => {
     try {
         const { password, sessionId } = req.body;
